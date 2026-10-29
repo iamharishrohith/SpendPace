@@ -1,0 +1,274 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum AccountType {
+  SAVINGS_BANK
+  SALARY_ACCOUNT
+  CREDIT_CARD
+  UPI_WALLET
+  DIGITAL_GOLD
+  INVESTMENT_SIP
+  CASH
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  INVESTMENT_OUTFLOW
+}
+
+enum IngestionSource {
+  MANUAL
+  UPI_SCREENSHOT_OCR
+  RECEIPT_OCR
+  RECURRING_AUTO
+}
+
+model User {
+  id                 String         @id @default(uuid())
+  email              String         @unique
+  fullName           String
+  baseCurrency       String         @default("INR")
+  monthlyIncome      Decimal        @default(0.00) @db.Decimal(12, 2)
+  payCycleDay        Int            @default(1)
+  maritalStatus      String?        @default("SINGLE")
+  gender             String?        @default("MALE")
+  dependentsCount    Int            @default(0)
+  occupationCategory String?        @default("SALARIED")
+  occupationSubRole  String?
+  spouseIncome       Decimal        @default(0.00) @db.Decimal(12, 2)
+  otherIncome        Decimal        @default(0.00) @db.Decimal(12, 2)
+  partTimeIncome     Decimal        @default(0.00) @db.Decimal(12, 2)
+  isOnboarded        Boolean        @default(false)
+  leaveDaysSchedule  String?        @default("WEEKENDS")
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  accounts           Account[]
+  categories         Category[]
+  transactions       Transaction[]
+  budgets            Budget[]
+  goals              Goal[]
+  liabilities        Liability[]
+  plannerEvents      PlannerEvent[]
+  quickTags          QuickTag[]
+  moneyLent          MoneyLent[]
+  auditLogs          AuditLog[]
+  chatMessages       ChatMessage[]
+
+  @@index([email])
+}
+
+model Account {
+  id              String        @id @default(uuid())
+  userId          String
+  name            String
+  accountType     AccountType   @default(SAVINGS_BANK)
+  balance         Decimal       @default(0.00) @db.Decimal(12, 2)
+  creditLimit     Decimal?      @db.Decimal(12, 2)
+  billingCycleDay Int?
+  isDefault       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+
+  @@index([userId])
+}
+
+model Category {
+  id              String        @id @default(uuid())
+  userId          String?
+  name            String
+  icon            String
+  colorHex        String
+  isDiscretionary Boolean       @default(true)
+
+  user            User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+  budgets         Budget[]
+
+  @@index([userId])
+}
+
+model Transaction {
+  id              String          @id @default(uuid())
+  userId          String
+  accountId       String
+  categoryId      String
+  amount          Decimal         @db.Decimal(12, 2)
+  type            TransactionType
+  description     String
+  transactionDate DateTime
+  source          IngestionSource @default(MANUAL)
+  isRecurring     Boolean         @default(false)
+  upiRefNo        String?
+  idempotencyKey  String?         @unique
+
+  account         Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category        Category        @relation(fields: [categoryId], references: [id])
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receipt         Receipt?
+
+  @@index([userId, transactionDate])
+  @@index([userId, categoryId])
+  @@index([upiRefNo])
+}
+
+model Receipt {
+  id              String        @id @default(uuid())
+  transactionId   String        @unique
+  fileUrl         String
+  extractedJson   Json
+  confidenceScore Decimal       @db.Decimal(5, 2)
+  scannedAt       DateTime      @default(now())
+
+  transaction     Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+}
+
+model Budget {
+  id              String        @id @default(uuid())
+  userId          String
+  categoryId      String
+  monthYear       String
+  allocatedAmount Decimal       @db.Decimal(12, 2)
+  alertThreshold  Decimal       @default(0.80) @db.Decimal(3, 2)
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category        Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId, monthYear])
+  @@index([userId, monthYear])
+}
+
+model Goal {
+  id              String        @id @default(uuid())
+  userId          String
+  title           String
+  targetAmount    Decimal       @db.Decimal(12, 2)
+  currentAmount   Decimal       @default(0.00) @db.Decimal(12, 2)
+  targetDate      DateTime
+  priority        Int           @default(1)
+  isCompleted     Boolean       @default(false)
+  category        String?       @default("GENERAL")
+  autoTightenPace Boolean       @default(false)
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id              String        @id @default(uuid())
+  userId          String
+  action          String
+  ipAddress       String
+  userAgent       String
+  metadata        Json?
+  timestamp       DateTime      @default(now())
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp])
+}
+
+model Liability {
+  id                    String   @id @default(uuid())
+  userId                String
+  name                  String
+  category              String
+  monthlyPayment        Decimal  @db.Decimal(12, 2)
+  totalOutstanding      Decimal? @db.Decimal(12, 2)
+  interestRate          Decimal? @db.Decimal(5, 2)
+  tenureMonthsRemaining Int?
+  isInformal            Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PlannerEvent {
+  id              String        @id @default(uuid())
+  userId          String
+  title           String
+  category        String
+  targetAmount    Decimal       @default(0.00) @db.Decimal(12, 2)
+  allocatedAmount Decimal       @default(0.00) @db.Decimal(12, 2)
+  spentAmount     Decimal       @default(0.00) @db.Decimal(12, 2)
+  targetDate      DateTime?
+  notes           String?
+  isCompleted     Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items           PlannerItem[]
+
+  @@index([userId])
+}
+
+model PlannerItem {
+  id        String       @id @default(uuid())
+  plannerId String
+  title     String
+  amount    Decimal      @default(0.00) @db.Decimal(12, 2)
+  isPaid    Boolean      @default(false)
+  createdAt DateTime     @default(now())
+
+  planner   PlannerEvent @relation(fields: [plannerId], references: [id], onDelete: Cascade)
+
+  @@index([plannerId])
+}
+
+model QuickTag {
+  id               String   @id @default(uuid())
+  userId           String?
+  name             String
+  icon             String
+  categoryName     String
+  defaultIncrement Decimal  @default(10.00) @db.Decimal(10, 2)
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MoneyLent {
+  id           String    @id @default(uuid())
+  userId       String
+  borrowerName String
+  phone        String?
+  amount       Decimal   @db.Decimal(12, 2)
+  lentDate     DateTime  @default(now())
+  notes        String?
+  isRecovered  Boolean   @default(false)
+  recoveredAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  userId     String
+  role       String
+  content    String
+  actionData Json?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}

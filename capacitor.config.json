@@ -1,0 +1,12 @@
+{
+  "appId": "com.spendpace.app",
+  "appName": "SpendPace",
+  "webDir": "public",
+
+  "plugins": {
+    "StatusBar": {
+      "backgroundColor": "#121316",
+      "style": "DARK"
+    }
+  }
+}

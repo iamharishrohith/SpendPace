@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" fill="none">
+  <defs>
+    <linearGradient id="emeraldGrad" x1="40" y1="216" x2="216" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="50%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#34D399" />
+    </linearGradient>
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Deep Dark Base with subtle emerald perimeter border -->
+  <rect x="12" y="12" width="232" height="232" rx="54" fill="#0B0C10" stroke="#10B981" stroke-width="2.5" stroke-opacity="0.25" />
+  <circle cx="128" cy="128" r="80" fill="url(#coreGlow)" />
+
+  <!-- Continuous Pace Loop: Upper Dynamic S-Ribbon -->
+  <path
+    d="M 172 72 C 204 72 216 98 210 124 C 202 152 168 166 128 174 C 88 182 64 196 64 212"
+    stroke="url(#emeraldGrad)"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Counter Balance Arc (Financial Health & Equilibrium) -->
+  <path
+    d="M 84 184 C 52 184 40 158 46 132 C 54 104 88 90 128 82 C 168 74 192 60 192 44"
+    stroke="url(#emeraldGrad)"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-opacity="0.4"
+  />
+
+  <!-- Center AI Node: 4-Point Neural Sparkle -->
+  <path
+    d="M 128 104 C 128 117 137 128 152 128 C 137 128 128 139 128 152 C 128 139 119 128 104 128 C 119 128 128 117 128 104 Z"
+    fill="#FFFFFF"
+  />
+</svg>
