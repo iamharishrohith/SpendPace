@@ -24,13 +24,18 @@ export async function POST(req) {
 
     const errors = {};
 
-    // 1. SSR Email Validation
+    // 1. SSR Email Validation (Strict lowercase + @gmail.com check)
     if (!email || typeof email !== "string") {
       errors.email = "Email address is required.";
     } else {
+      if (/[A-Z]/.test(email)) {
+        errors.email = "Email must not contain capital letters. Please use lowercase only.";
+      }
       const cleanEmail = email.trim().toLowerCase();
       if (!EMAIL_REGEX.test(cleanEmail)) {
         errors.email = "Please enter a valid email address.";
+      } else if (!cleanEmail.endsWith("@gmail.com")) {
+        errors.email = "Please use a valid @gmail.com email address.";
       } else {
         const domain = cleanEmail.split("@")[1];
         if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
@@ -48,9 +53,11 @@ export async function POST(req) {
           errors.password = "Password must be at least 8 characters long.";
         } else if (!/[A-Z]/.test(password)) {
           errors.password = "Password must contain at least one uppercase letter (A-Z).";
+        } else if (!/[a-z]/.test(password)) {
+          errors.password = "Password must contain at least one lowercase letter (a-z).";
         } else if (!/[0-9]/.test(password)) {
           errors.password = "Password must contain at least one number (0-9).";
-        } else if (!/[^A-Za-z0-9]/.test(password)) {
+        } else if (!/[!@#$%^&*]/.test(password)) {
           errors.password = "Password must contain at least one special character (!@#$%^&*).";
         }
       } else {
@@ -62,7 +69,7 @@ export async function POST(req) {
 
     // 3. SSR Captcha Verification
     if (!captchaToken || typeof captchaToken !== "string" || !captchaToken.startsWith("cf_token_")) {
-      errors.captcha = "Security verification failed. Please complete the captcha check.";
+      errors.captcha = "Security verification required. Please verify the security captcha.";
     }
 
     // If any SSR validation fails, return 422 Unprocessable Entity

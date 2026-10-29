@@ -24,7 +24,9 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   // Captcha state
   const [captchaStatus, setCaptchaStatus] = useState("idle"); // 'idle', 'verifying', 'verified'
@@ -33,23 +35,26 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // Client-Side Email Validation
-  const isValidEmailFormat = (str) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
-  const isEmailValid = email ? isValidEmailFormat(email) : null;
+  // Client-Side Email Validation (Lowercase only + @gmail.com)
+  const hasCapsInEmail = /[A-Z]/.test(email);
+  const isGmail = /^[a-z0-9._%+-]+@gmail\.com$/.test(email.trim());
+  const isEmailValid = email ? (!hasCapsInEmail && isGmail) : null;
 
-  // Client-Side Password Entropy Check
+  // Client-Side Password Entropy Check (5 security rules)
   const checkPasswordRules = (pass) => {
     return {
       length: pass.length >= 8,
       uppercase: /[A-Z]/.test(pass),
+      lowercase: /[a-z]/.test(pass),
       number: /[0-9]/.test(pass),
-      special: /[^A-Za-z0-9]/.test(pass),
+      special: /[!@#$%^&*]/.test(pass),
     };
   };
 
   const rules = checkPasswordRules(password);
   const passedCount = Object.values(rules).filter(Boolean).length;
-  const strengthPercent = (passedCount / 4) * 100;
+  const strengthPercent = (passedCount / 5) * 100;
+  const isPasswordMatching = password.length > 0 && password === confirmPassword;
 
   // Initialize automatic Turnstile token generation
   useEffect(() => {
@@ -73,14 +78,26 @@ export default function LoginPage() {
     setFieldErrors({});
 
     // Client preliminary checks
-    if (!isValidEmailFormat(email)) {
-      setFieldErrors((prev) => ({ ...prev, email: "Please enter a valid email format." }));
+    if (hasCapsInEmail) {
+      setFieldErrors((prev) => ({ ...prev, email: "Email must not contain capital letters. Please use lowercase only." }));
       return;
     }
 
-    if (mode === "register" && passedCount < 3) {
-      setFieldErrors((prev) => ({ ...prev, password: "Password does not meet minimum security requirements." }));
+    if (!isGmail) {
+      setFieldErrors((prev) => ({ ...prev, email: "Only verified @gmail.com email addresses are allowed." }));
       return;
+    }
+
+    if (mode === "register") {
+      if (passedCount < 5) {
+        setFieldErrors((prev) => ({ ...prev, password: "Password must meet all 5 security requirements." }));
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setFieldErrors((prev) => ({ ...prev, confirmPassword: "Passwords do not match." }));
+        return;
+      }
     }
 
     if (captchaStatus !== "verified" || !captchaToken) {
@@ -326,16 +343,69 @@ export default function LoginPage() {
                     <span className={rules.uppercase ? "text-emerald-500 font-semibold" : ""}>
                       {rules.uppercase ? "✓" : "○"} Uppercase (A-Z)
                     </span>
+                    <span className={rules.lowercase ? "text-emerald-500 font-semibold" : ""}>
+                      {rules.lowercase ? "✓" : "○"} Lowercase (a-z)
+                    </span>
                     <span className={rules.number ? "text-emerald-500 font-semibold" : ""}>
                       {rules.number ? "✓" : "○"} Number (0-9)
                     </span>
                     <span className={rules.special ? "text-emerald-500 font-semibold" : ""}>
-                      {rules.special ? "✓" : "○"} Symbol (!@#$)
+                      {rules.special ? "✓" : "○"} Symbol (!@#$%^&*)
                     </span>
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Confirm Password Field (Register Mode Only) */}
+            {mode === "register" && (
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Confirm Password
+                  </label>
+                  {confirmPassword.length > 0 && (
+                    <span className={`text-[10px] font-bold flex items-center gap-1 ${isPasswordMatching ? "text-emerald-500" : "text-rose-500"}`}>
+                      {isPasswordMatching ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                      {isPasswordMatching ? "Passwords Match" : "Mismatch"}
+                    </span>
+                  )}
+                </div>
+                <div className="relative flex items-center">
+                  <Lock className="absolute left-3.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    placeholder="Repeat your password"
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      if (fieldErrors.confirmPassword) setFieldErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                    }}
+                    className={`w-full pl-10 pr-10 py-3 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 ${
+                      fieldErrors.confirmPassword 
+                        ? "border-rose-500 focus:ring-rose-500" 
+                        : confirmPassword.length > 0 && isPasswordMatching
+                        ? "border-emerald-500/50 focus:ring-emerald-500"
+                        : "border-black/10 dark:border-white/10 focus:ring-emerald-500"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                    className="absolute right-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {fieldErrors.confirmPassword && (
+                  <p className="mt-1 text-[11px] font-semibold text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> {fieldErrors.confirmPassword}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Cloudflare Turnstile Captcha Widget */}
             <div className="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 space-y-2">

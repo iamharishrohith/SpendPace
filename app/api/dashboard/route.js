@@ -26,50 +26,50 @@ export async function GET(req) {
     let user = userRes.rows[0];
 
     if (!user) {
-      // Create primary user with complete structure
-      const newUser = await query(`
-        INSERT INTO "User" (
-          id, email, "fullName", "baseCurrency", "monthlyIncome", "payCycleDay", 
-          "maritalStatus", "gender", "dependentsCount", "occupationCategory", "occupationSubRole", 
-          "spouseIncome", "otherIncome", "isOnboarded", "createdAt", "updatedAt"
-        )
-        VALUES (
-          gen_random_uuid(), 'user@spendpace.com', 'Alex Vance', 'INR', 85000.00, 1, 
-          'FAMILY_HEAD', 'MALE', 2, 'SALARIED', 'Corporate / MNC Staff', 
-          35000.00, 0.00, true, NOW(), NOW()
-        )
-        RETURNING *
-      `);
-      user = newUser.rows[0];
-
-      // Create primary accounts
-      await query(`
-        INSERT INTO "Account" (id, "userId", name, "accountType", balance, "creditLimit", "isDefault", "createdAt")
-        VALUES 
-          (gen_random_uuid(), $1, 'HDFC Salary Account', 'SAVINGS_BANK', 62500.00, NULL, true, NOW()),
-          (gen_random_uuid(), $1, 'Regalia Credit Card', 'CREDIT_CARD', 0.00, 300000.00, false, NOW())
-      `, [user.id]);
-
-      // Create default categories
-      await query(`
-        INSERT INTO "Category" (id, "userId", name, icon, "colorHex", "isDiscretionary")
-        VALUES 
-          (gen_random_uuid(), $1, 'Dining & Food', 'Utensils', '#F59E0B', true),
-          (gen_random_uuid(), $1, 'Groceries', 'ShoppingBag', '#10B981', false),
-          (gen_random_uuid(), $1, 'Fuel & Commute', 'Car', '#3B82F6', true),
-          (gen_random_uuid(), $1, 'Utilities & Bills', 'Zap', '#8B5CF6', false),
-          (gen_random_uuid(), $1, 'Shopping', 'ShoppingCart', '#EC4899', true),
-          (gen_random_uuid(), $1, 'Medical & Health', 'HeartPulse', '#EF4444', false),
-          (gen_random_uuid(), $1, 'Entertainment', 'Film', '#6366F1', true)
-      `, [user.id]);
-
-      // Create sample committed goals
-      await query(`
-        INSERT INTO "Goal" (id, "userId", title, "targetAmount", "currentAmount", "targetDate", priority, "isCompleted")
-        VALUES 
-          (gen_random_uuid(), $1, 'Emergency Reserve Fund', 150000.00, 95000.00, '2027-03-31', 1, false),
-          (gen_random_uuid(), $1, 'Sovereign Gold Asset', 80000.00, 48000.00, '2026-12-31', 2, false)
-      `, [user.id]);
+      return NextResponse.json({
+        user: {
+          id: null,
+          name: "",
+          email: "",
+          currency: "INR",
+          monthlyIncome: 0,
+          spouseIncome: 0,
+          partTimeIncome: 0,
+          otherIncome: 0,
+          totalHouseholdInflow: 0,
+          payCycleDay: 1,
+          maritalStatus: "SINGLE",
+          gender: "MALE",
+          dependentsCount: 0,
+          occupationCategory: "SALARIED",
+          occupationSubRole: "Staff",
+          isOnboarded: false,
+        },
+        accounts: [],
+        categories: [],
+        transactions: [],
+        goals: [],
+        liabilities: [],
+        metrics: {
+          totalSpent: 0,
+          monthlyIncome: 0,
+          spouseIncome: 0,
+          partTimeIncome: 0,
+          otherIncome: 0,
+          totalHouseholdInflow: 0,
+          totalDebtMonthly: 0,
+          baselineLivingCost: 0,
+          committedBills: 0,
+          daysRemaining: 1,
+          totalDiscretionary: 0,
+          remainingDiscretionary: 0,
+          safeDaily: 0,
+          rawSafeDaily: 0,
+          goalTightenReduction: 0,
+          burnPercentage: 0,
+        },
+        shortageAlert: null,
+      });
     }
 
     // 2. Fetch all user data with Upstash Redis caching (sub-15ms response)
