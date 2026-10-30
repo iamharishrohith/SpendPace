@@ -24,7 +24,7 @@ export async function POST(req) {
 
     const errors = {};
 
-    // 1. SSR Email Validation (Strict lowercase + @gmail.com check)
+    // 1. SSR Email Validation (Strict lowercase + valid domain check)
     if (!email || typeof email !== "string") {
       errors.email = "Email address is required.";
     } else {
@@ -34,8 +34,6 @@ export async function POST(req) {
       const cleanEmail = email.trim().toLowerCase();
       if (!EMAIL_REGEX.test(cleanEmail)) {
         errors.email = "Please enter a valid email address.";
-      } else if (!cleanEmail.endsWith("@gmail.com")) {
-        errors.email = "Please use a valid @gmail.com email address.";
       } else {
         const domain = cleanEmail.split("@")[1];
         if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {

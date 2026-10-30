@@ -35,10 +35,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // Client-Side Email Validation (Lowercase only + @gmail.com)
+  // Client-Side Email Validation (Lowercase only + valid email domain)
   const hasCapsInEmail = /[A-Z]/.test(email);
-  const isGmail = /^[a-z0-9._%+-]+@gmail\.com$/.test(email.trim());
-  const isEmailValid = email ? (!hasCapsInEmail && isGmail) : null;
+  const isStandardEmail = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email.trim());
+  const isEmailValid = email ? (!hasCapsInEmail && isStandardEmail) : null;
 
   // Client-Side Password Entropy Check (5 security rules)
   const checkPasswordRules = (pass) => {
@@ -83,8 +83,8 @@ export default function LoginPage() {
       return;
     }
 
-    if (!isGmail) {
-      setFieldErrors((prev) => ({ ...prev, email: "Only verified @gmail.com email addresses are allowed." }));
+    if (!isStandardEmail) {
+      setFieldErrors((prev) => ({ ...prev, email: "Please enter a valid email address (e.g. name@domain.com)." }));
       return;
     }
 
