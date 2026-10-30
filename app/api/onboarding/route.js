@@ -6,6 +6,7 @@ export async function POST(req) {
     const body = await req.json();
     const {
       userId,
+      email,
       maritalStatus = "SINGLE",
       gender = "MALE",
       dependentsCount = 0,
@@ -20,7 +21,15 @@ export async function POST(req) {
 
     let targetUserId = userId;
 
-    // If userId not provided in body, try to resolve from cookie or existing user
+    // If userId not provided in body, try to resolve from email
+    if (!targetUserId && email) {
+      const emailRes = await query(`SELECT id FROM "User" WHERE LOWER(email) = LOWER($1) LIMIT 1`, [email.trim()]);
+      if (emailRes.rows.length > 0) {
+        targetUserId = emailRes.rows[0].id;
+      }
+    }
+
+    // If still not resolved, try cookie
     if (!targetUserId) {
       const cookie = req.cookies.get("spendpace_session")?.value;
       if (cookie) {
