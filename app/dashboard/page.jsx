@@ -306,8 +306,8 @@ export default function DashboardPage() {
               liabilities={liabilities}
             />
 
-            {/* Regional Macro Indicators & Financial Bulletins Radar */}
-            <FinancialNewsRadar />
+            {/* Forward Cashflow Horizon & Pace Elasticity Radar */}
+            <FinancialNewsRadar metrics={data.metrics} currency={currency} />
 
             {/* Real Transaction Stream (Zero Mock Data) */}
             <div className="rounded-3xl fintech-card p-6 sm:p-8">
