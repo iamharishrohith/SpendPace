@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -24,7 +24,8 @@ import {
   Calendar, 
   CalendarCheck,
   ChevronDown,
-  User as UserIcon
+  User as UserIcon,
+  Code2
 } from "lucide-react";
 
 export default function Navbar({ onOpenAddModal, onOpenCommandBar }) {
@@ -89,6 +90,7 @@ export default function Navbar({ onOpenAddModal, onOpenCommandBar }) {
     { name: "Goals", href: "/goals", icon: Target },
     { name: "Planner", href: "/planner", icon: Calendar },
     { name: "Scanner", href: "/scanner", icon: Receipt },
+    { name: "API Docs", href: "/docs", icon: Code2 },
   ];
 
   const landingNavLinks = [

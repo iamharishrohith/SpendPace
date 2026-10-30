@@ -11,6 +11,7 @@ import AddTransactionModal from "@/components/AddTransactionModal";
 import BottomNav from "@/components/BottomNav";
 import QuickSpendTracker from "@/components/QuickSpendTracker";
 import FinancialNewsRadar from "@/components/FinancialNewsRadar";
+import DownloadMonthlyPdfBtn from "@/components/DownloadMonthlyPdfBtn";
 import GoalShortageAlert from "@/components/GoalShortageAlert";
 import AIDiagnosticsCard from "@/components/AIDiagnosticsCard";
 import AICashflowAdvisorModal from "@/components/AICashflowAdvisorModal";
@@ -156,6 +157,8 @@ export default function DashboardPage() {
               <Receipt className="w-4 h-4 text-emerald-500" />
               <span>{showScanner ? "Hide Scanner" : "Scan Receipt"}</span>
             </button>
+
+            <DownloadMonthlyPdfBtn />
 
             <button
               onClick={() => setIsAddModalOpen(true)}
@@ -322,6 +325,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <DownloadMonthlyPdfBtn />
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400">
                     {transactions.length} Recorded
                   </span>

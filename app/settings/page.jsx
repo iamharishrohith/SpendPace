@@ -81,6 +81,8 @@ export default function SettingsPage() {
   const [newLentAmount, setNewLentAmount] = useState("");
   const [newLentNotes, setNewLentNotes] = useState("");
   const [lendingSubmitting, setLendingSubmitting] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState(null);
 
   // New liability input row state
   const [newLiabName, setNewLiabName] = useState("");
