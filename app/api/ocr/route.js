@@ -1,11 +1,18 @@
 import { query } from "@/lib/db";
 import { invalidateCache } from "@/lib/redis";
 import { NextResponse } from "next/server";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
 const DIAGNOSTIC_KEY = process.env.SPENDPACE_DIAGNOSTIC_API_KEY || "";
 
 export async function POST(req) {
   try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = user.id;
+
     const { imageBase64, mimeType = "image/jpeg" } = await req.json();
 
     if (!imageBase64) {
@@ -14,21 +21,6 @@ export async function POST(req) {
 
     // Strip data URL header if present (e.g. data:image/png;base64,...)
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
-
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
-    }
-
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ error: "User unauthorized" }, { status: 401 });
-    }
 
     // Call Gemini 3.5 Flash Vision Engine
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${DIAGNOSTIC_KEY}`;

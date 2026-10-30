@@ -41,12 +41,14 @@ export async function POST(req) {
     }
 
     if (!targetUserId) {
-      // Fallback to first user in database
-      const userRes = await query(`SELECT id FROM "User" LIMIT 1`);
-      if (userRes.rows.length > 0) {
-        targetUserId = userRes.rows[0].id;
-      } else {
-        return NextResponse.json({ success: false, error: "User session not found." }, { status: 401 });
+      if (process.env.NODE_ENV !== "production" || process.env.ALLOW_DEMO_FALLBACK === "true") {
+        const userRes = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
+        if (userRes.rows.length > 0) {
+          targetUserId = userRes.rows[0].id;
+        }
+      }
+      if (!targetUserId) {
+        return NextResponse.json({ success: false, error: "Unauthorized: User session required." }, { status: 401 });
       }
     }
 

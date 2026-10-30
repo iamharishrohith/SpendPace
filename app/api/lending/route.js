@@ -1,28 +1,14 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
-
-async function getUserId(req) {
-  let userId = null;
-  const cookie = req.cookies.get("spendpace_session")?.value;
-  if (cookie) {
-    try {
-      const session = JSON.parse(cookie);
-      userId = session.userId;
-    } catch (e) {}
-  }
-  if (!userId) {
-    const firstUser = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-    if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-  }
-  return userId;
-}
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(req) {
   try {
-    const userId = await getUserId(req);
-    if (!userId) {
-      return NextResponse.json({ moneyLent: [], totalFrozen: 0, totalRecovered: 0 });
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
+    const userId = user.id;
 
     const res = await query(`
       SELECT 
@@ -90,10 +76,11 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    const userId = await getUserId(req);
-    if (!userId) {
-      return NextResponse.json({ error: "User unauthorized" }, { status: 401 });
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
+    const userId = user.id;
 
     const body = await req.json();
     const { borrowerName, phone = null, amount, lentDate = null, notes = null } = body;
@@ -133,10 +120,11 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   try {
-    const userId = await getUserId(req);
-    if (!userId) {
-      return NextResponse.json({ error: "User unauthorized" }, { status: 401 });
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
+    const userId = user.id;
 
     const body = await req.json();
     const { id, isRecovered, borrowerName, phone, amount, notes } = body;
@@ -180,10 +168,11 @@ export async function PATCH(req) {
 
 export async function DELETE(req) {
   try {
-    const userId = await getUserId(req);
-    if (!userId) {
-      return NextResponse.json({ error: "User unauthorized" }, { status: 401 });
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
+    const userId = user.id;
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");

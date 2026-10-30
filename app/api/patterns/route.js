@@ -1,23 +1,15 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getOrSetCache } from "@/lib/redis";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(req) {
   try {
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
-
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ error: "User unauthorized" }, { status: 401 });
-    }
+    const userId = user.id;
 
     const { searchParams } = new URL(req.url);
     const monthParam = searchParams.get("month"); // e.g. "2026-10"

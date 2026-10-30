@@ -1,26 +1,15 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { invalidateCache } from "@/lib/redis";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(req) {
   try {
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
-
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-      if (firstUser.rows.length > 0) {
-        userId = firstUser.rows[0].id;
-      } else {
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-      }
-    }
+    const userId = user.id;
 
     // Ensure table and column exist seamlessly
     await query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "leaveDaysSchedule" TEXT DEFAULT 'WEEKENDS'`);
@@ -97,21 +86,13 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    const body = await req.json();
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
+    const userId = user.id;
 
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    const body = await req.json();
 
     const {
       fullName,

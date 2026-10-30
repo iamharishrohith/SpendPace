@@ -1,22 +1,14 @@
-﻿import { query } from "@/lib/db";
+import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(req) {
   try {
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
-
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" LIMIT 1`);
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ events: [] });
-    }
+    const userId = user.id;
 
     // Fetch events with item count and details
     const eventsRes = await query(`
@@ -63,20 +55,11 @@ export async function POST(req) {
     const body = await req.json();
     const { title, category = "TRAVEL", targetAmount = 0, allocatedAmount = 0, targetDate, notes = "", items = [] } = body;
 
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
-
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" LIMIT 1`);
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = user.id;
 
     const cleanTarget = parseFloat(targetAmount) || 0;
     const cleanAllocated = parseFloat(allocatedAmount) || 0;

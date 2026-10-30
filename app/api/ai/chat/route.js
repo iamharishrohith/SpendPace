@@ -2,22 +2,11 @@ import { query } from "@/lib/db";
 import { planCashflowChat } from "@/lib/ai";
 import { NextResponse } from "next/server";
 import { invalidateCache } from "@/lib/redis";
+import { getAuthenticatedUser } from "@/lib/auth";
 
 async function getUserId(req) {
-  let userId = null;
-  const cookie = req.cookies.get("spendpace_session")?.value;
-  if (cookie) {
-    try {
-      const session = JSON.parse(cookie);
-      userId = session.userId;
-    } catch (e) {}
-  }
-
-  if (!userId) {
-    const firstUser = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-    if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-  }
-  return userId;
+  const user = await getAuthenticatedUser(req);
+  return user?.id || null;
 }
 
 /**

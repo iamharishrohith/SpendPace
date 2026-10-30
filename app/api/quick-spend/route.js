@@ -1,31 +1,22 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { invalidateCache } from "@/lib/redis";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function POST(req) {
   try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = user.id;
+
     const body = await req.json();
     const { amount, tagName = "Chai / Tea Time", categoryName = "Dining & Food", notes } = body;
 
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount <= 0) {
       return NextResponse.json({ success: false, error: "Invalid amount." }, { status: 400 });
-    }
-
-    // 1. Resolve User
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
-    }
-
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" LIMIT 1`);
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
     // 2. Find or create matching Category

@@ -1,22 +1,14 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(req) {
   try {
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
-
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ goals: [] });
-    }
+    const userId = user.id;
 
     const goalsRes = await query(`
       SELECT 
@@ -96,20 +88,11 @@ export async function POST(req) {
       return NextResponse.json({ error: "Title and target amount are required" }, { status: 400 });
     }
 
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
     }
-
-    if (!userId) {
-      const firstUser = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = user.id;
 
     const cleanTarget = parseFloat(targetAmount) || 0;
     const cleanCurrent = parseFloat(currentAmount) || 0;

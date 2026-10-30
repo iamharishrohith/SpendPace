@@ -1,12 +1,15 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { invalidateCache } from "@/lib/redis";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req) {
   try {
-    const userRes = await query(`SELECT id FROM "User" LIMIT 1`);
-    if (!userRes.rows.length) return NextResponse.json({ transactions: [] });
-    const userId = userRes.rows[0].id;
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = user.id;
 
     const res = await query(`
       SELECT 
@@ -37,12 +40,14 @@ export async function GET() {
 
 export async function POST(req) {
   try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = user.id;
+
     const body = await req.json();
     const { amount, description, categoryName, accountName, type = "EXPENSE", source = "MANUAL" } = body;
-
-    const userRes = await query(`SELECT id FROM "User" LIMIT 1`);
-    if (!userRes.rows.length) throw new Error("User not found");
-    const userId = userRes.rows[0].id;
 
     // Find category ID or default to first category
     let catRes = await query(`SELECT id FROM "Category" WHERE "userId" = $1 AND LOWER(name) = LOWER($2) LIMIT 1`, [userId, categoryName || "Dining & Food"]);

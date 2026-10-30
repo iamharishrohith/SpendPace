@@ -1,31 +1,17 @@
 import { query, withClient } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getOrSetCache } from "@/lib/redis";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
 export async function GET(req) {
   try {
-    // 1. Resolve authenticated user from session cookie or primary record
-    let targetUserId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        targetUserId = session.userId;
-      } catch (e) {}
-    }
-
-    let userRes;
-    if (targetUserId) {
-      userRes = await query(`SELECT * FROM "User" WHERE id = $1`, [targetUserId]);
-    }
-
-    if (!userRes || userRes.rows.length === 0) {
-      userRes = await query(`SELECT * FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-    }
-
-    let user = userRes.rows[0];
+    // 1. Resolve authenticated user from session, Authorization header, or guarded fallback
+    const user = await getAuthenticatedUser(req);
 
     if (!user) {
+      if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_FALLBACK !== "true") {
+        return unauthorizedResponse();
+      }
       return NextResponse.json({
         user: {
           id: null,

@@ -2,23 +2,15 @@ import { query } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { getAuthenticatedUser, unauthorizedResponse, escapeHtml } from "@/lib/auth";
 
 export async function POST(req) {
   try {
-    let userId = null;
-    const cookie = req.cookies.get("spendpace_session")?.value;
-    if (cookie) {
-      try {
-        const session = JSON.parse(cookie);
-        userId = session.userId;
-      } catch (e) {}
+    const userAuth = await getAuthenticatedUser(req);
+    if (!userAuth) {
+      return unauthorizedResponse();
     }
-
-    if (!userId) {
-      const firstUser = await query('SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1');
-      if (firstUser.rows.length > 0) userId = firstUser.rows[0].id;
-      else return NextResponse.json({ error: "User unauthorized" }, { status: 401 });
-    }
+    const userId = userAuth.id;
 
     // 1. Fetch user data, transactions for the past 7 days, goals and liabilities
     const [userRes, txRes, goalRes, liabRes] = await Promise.all([
@@ -66,7 +58,7 @@ export async function POST(req) {
           <!-- Body -->
           <div style="padding: 24px;">
             <p style="font-size: 15px; font-weight: 700; color: #FFFFFF; margin-top: 0;">
-              Hello ${userName},
+              Hello ${escapeHtml(userName)},
             </p>
             <p style="font-size: 13px; color: #94A3B8; line-height: 1.6;">
               Here is your verified weekly financial telemetry for the past 7 days. Your spend pace velocity is categorized as 
@@ -99,7 +91,7 @@ export async function POST(req) {
                   return `
                     <div style="padding: 10px 12px; background: rgba(255,255,255,0.02); border-radius: 10px; margin-bottom: 6px;">
                       <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #FFFFFF;">
-                        <span>${g.title}</span>
+                        <span>${escapeHtml(g.title)}</span>
                         <span style="color: #10B981;">${pct}%</span>
                       </div>
                       <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">${formatCurrency(g.currentAmount, currency)} of ${formatCurrency(g.targetAmount, currency)}</div>
