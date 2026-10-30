@@ -47,9 +47,7 @@ export async function GET(req) {
       const totalHouseholdInflow = monthlyIncome + partTimeIncome + spouseIncome + otherIncome;
 
       const totalDebt = liabilities.reduce((sum, l) => sum + (parseFloat(l.monthlyPayment) || 0), 0);
-      const dependents = parseInt(user.dependentsCount, 10) || 0;
-      const baselineLivingCost = user.maritalStatus === "SINGLE" ? 22000 : 32000 + (dependents * 7500);
-      const committedBills = totalDebt + baselineLivingCost;
+      const committedBills = totalDebt;
       const totalDiscretionary = Math.max(0, totalHouseholdInflow - committedBills);
       const safeDaily = Math.round(totalDiscretionary / 30);
 

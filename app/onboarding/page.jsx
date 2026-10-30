@@ -161,11 +161,9 @@ export default function OnboardingPage() {
 
   // Dynamic Family Baseline Estimator
   const totalDependents = childrenCount + elderlyCount;
-  const baseLivingCost = maritalStatus === "SINGLE" 
-    ? 22000 
-    : 32000 + (totalDependents * 7500);
+  const baseLivingCost = 0;
 
-  const netDiscretionary = Math.max(0, totalHouseholdInflow - totalMonthlyDebt - baseLivingCost);
+  const netDiscretionary = Math.max(0, totalHouseholdInflow - totalMonthlyDebt);
   const dailySafeVelocity = Math.max(0, Math.round(netDiscretionary / 30));
 
   // Adjust default subrole when category changes
@@ -815,8 +813,8 @@ export default function OnboardingPage() {
                   <div className="text-xs sm:text-sm font-bold text-amber-400">₹{totalMonthlyDebt.toLocaleString("en-IN")}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-400 font-medium">Living Reserve</div>
-                  <div className="text-xs sm:text-sm font-bold text-emerald-400">₹{baseLivingCost.toLocaleString("en-IN")}</div>
+                  <div className="text-[10px] text-slate-400 font-medium">Net Discretionary</div>
+                  <div className="text-xs sm:text-sm font-bold text-emerald-400">₹{netDiscretionary.toLocaleString("en-IN")}</div>
                 </div>
               </div>
             </div>

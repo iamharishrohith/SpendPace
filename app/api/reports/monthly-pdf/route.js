@@ -36,7 +36,7 @@ export async function GET(req) {
     const totalInflow = (user.monthlyIncome || 0) + (user.spouseIncome || 0) + (user.partTimeIncome || 0) + (user.otherIncome || 0);
     const totalDebt = liabilities.reduce((s, l) => s + l.monthlyPayment, 0);
     const totalSpent = transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
-    const netSavings = Math.max(0, totalInflow - totalDebt - 22000 - totalSpent);
+    const netSavings = Math.max(0, totalInflow - totalDebt - totalSpent);
 
     const categoryBreakdown = {};
     transactions.filter(t => t.type === "EXPENSE").forEach(t => {
@@ -55,7 +55,7 @@ export async function GET(req) {
       summary: {
         totalInflow,
         totalDebt,
-        baselineLiving: 22000,
+        baselineLiving: 0,
         totalSpent,
         netSavings,
         savingsRate: totalInflow > 0 ? Math.round((netSavings / totalInflow) * 100) : 0,

@@ -78,10 +78,7 @@ export async function GET(req) {
       const otherIncome = parseFloat(user.otherIncome) || 0;
       const totalHouseholdInflow = monthlyIncome + spouseIncome + partTimeIncome + otherIncome;
 
-      const dependentsCount = parseInt(user.dependentsCount, 10) || 0;
-      const isSingle = user.maritalStatus === "SINGLE";
-      const baselineLivingCost = isSingle ? 22000 : 32000 + (dependentsCount * 7500);
-      const committedBills = totalDebtMonthly + baselineLivingCost;
+      const committedBills = totalDebtMonthly;
 
     const totalDiscretionary = Math.max(0, totalHouseholdInflow - committedBills);
     // Baseline safe daily spend for this month

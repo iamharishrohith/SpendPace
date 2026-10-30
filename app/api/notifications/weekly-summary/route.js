@@ -35,7 +35,7 @@ export async function POST(req) {
 
     const totalDebt = liabilities.reduce((sum, l) => sum + l.monthlyPayment, 0);
     const monthlyIncome = user.monthlyIncome || 0;
-    const discretionaryPool = Math.max(0, monthlyIncome - totalDebt - 22000);
+    const discretionaryPool = Math.max(0, monthlyIncome - totalDebt);
     const safeDaily = Math.round(discretionaryPool / 30);
     const paceStatus = avgDailySpent <= safeDaily ? "HEALTHY & DISCIPLINED" : "ELEVATED BURN";
 
