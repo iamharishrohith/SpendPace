@@ -24,21 +24,16 @@ export async function POST(req) {
 
     const errors = {};
 
-    // 1. SSR Email Validation (Strict lowercase + valid domain check)
-    if (!email || typeof email !== "string") {
+    // 1. SSR Email Validation (Normalize lowercase + valid domain check)
+    const cleanEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (!cleanEmail) {
       errors.email = "Email address is required.";
+    } else if (!EMAIL_REGEX.test(cleanEmail)) {
+      errors.email = "Please enter a valid email address.";
     } else {
-      if (/[A-Z]/.test(email)) {
-        errors.email = "Email must not contain capital letters. Please use lowercase only.";
-      }
-      const cleanEmail = email.trim().toLowerCase();
-      if (!EMAIL_REGEX.test(cleanEmail)) {
-        errors.email = "Please enter a valid email address.";
-      } else {
-        const domain = cleanEmail.split("@")[1];
-        if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
-          errors.email = "Temporary and disposable email addresses are not allowed.";
-        }
+      const domain = cleanEmail.split("@")[1];
+      if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
+        errors.email = "Temporary and disposable email addresses are not allowed.";
       }
     }
 

@@ -35,10 +35,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // Client-Side Email Validation (Lowercase only + valid email domain)
-  const hasCapsInEmail = /[A-Z]/.test(email);
-  const isStandardEmail = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email.trim());
-  const isEmailValid = email ? (!hasCapsInEmail && isStandardEmail) : null;
+  // Client-Side Email Validation (Normalize lowercase + valid email format)
+  const isStandardEmail = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim());
+  const isEmailValid = email ? isStandardEmail : null;
 
   // Client-Side Password Entropy Check (5 security rules)
   const checkPasswordRules = (pass) => {
@@ -78,11 +77,6 @@ export default function LoginPage() {
     setFieldErrors({});
 
     // Client preliminary checks
-    if (hasCapsInEmail) {
-      setFieldErrors((prev) => ({ ...prev, email: "Email must not contain capital letters. Please use lowercase only." }));
-      return;
-    }
-
     if (!isStandardEmail) {
       setFieldErrors((prev) => ({ ...prev, email: "Please enter a valid email address (e.g. name@domain.com)." }));
       return;
@@ -114,9 +108,9 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
-          email,
+          email: email.trim().toLowerCase(),
           password,
-          fullName: mode === "register" ? fullName : undefined,
+          fullName: mode === "register" ? fullName.trim() : undefined,
           captchaToken,
         }),
       });
