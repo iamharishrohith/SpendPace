@@ -122,12 +122,8 @@ export async function GET(req) {
       const totalHouseholdInflow = monthlyIncome + spouseIncome + partTimeIncome + otherIncome;
 
       const totalDebtMonthly = liabilities.reduce((sum, item) => sum + (parseFloat(item.monthlyPayment) || 0), 0);
-
-      const dependentsCount = parseInt(user.dependentsCount, 10) || 0;
-      const isSingle = user.maritalStatus === "SINGLE";
-      const baselineLivingCost = isSingle ? 22000 : 32000 + (dependentsCount * 7500);
-
-      const committedBills = totalDebtMonthly + baselineLivingCost;
+      const baselineLivingCost = 0;
+      const committedBills = totalDebtMonthly;
 
       const now = new Date();
       const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
