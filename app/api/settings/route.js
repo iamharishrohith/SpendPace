@@ -29,13 +29,23 @@ export async function GET(req) {
       CREATE INDEX IF NOT EXISTS "idx_moneylent_user" ON "MoneyLent"("userId");
     `);
 
+    await query(`
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitFrequency" TEXT DEFAULT 'DAY';
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitAmount" DECIMAL(12, 2) DEFAULT 0.00;
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "activeLimitMode" TEXT DEFAULT 'DAILY';
+    `);
+
     const userRes = await query(`
       SELECT 
         id, email, "fullName", "baseCurrency",
         "monthlyIncome"::float, "spouseIncome"::float, "otherIncome"::float,
         COALESCE("partTimeIncome", 0)::float as "partTimeIncome",
         "payCycleDay", "maritalStatus", "gender", "dependentsCount",
-        "occupationCategory", "occupationSubRole", "leaveDaysSchedule", "isOnboarded", "createdAt", "updatedAt"
+        "occupationCategory", "occupationSubRole", "leaveDaysSchedule",
+        COALESCE("customLimitFrequency", 'DAY') as "customLimitFrequency",
+        COALESCE("customLimitAmount"::float, 0) as "customLimitAmount",
+        COALESCE("activeLimitMode", 'DAILY') as "activeLimitMode",
+        "isOnboarded", "createdAt", "updatedAt"
       FROM "User"
       WHERE id = $1
     `, [userId]);
@@ -94,6 +104,13 @@ export async function POST(req) {
 
     const body = await req.json();
 
+    // Ensure custom limit columns exist
+    await query(`
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitFrequency" TEXT DEFAULT 'DAY';
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitAmount" DECIMAL(12, 2) DEFAULT 0.00;
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "activeLimitMode" TEXT DEFAULT 'DAILY';
+    `);
+
     const {
       fullName,
       monthlyIncome = 0,
@@ -108,6 +125,9 @@ export async function POST(req) {
       occupationSubRole = "",
       leaveDaysSchedule = "WEEKENDS",
       walletBalance = null,
+      customLimitFrequency = "DAY",
+      customLimitAmount = null,
+      activeLimitMode = "DAILY",
       liabilities = [],
     } = body;
 
@@ -117,6 +137,7 @@ export async function POST(req) {
     const cleanOther = parseFloat(otherIncome) || 0;
     const cleanPayCycle = parseInt(payCycleDay, 10) || 1;
     const cleanDependents = parseInt(dependentsCount, 10) || 0;
+    const cleanCustomLimit = customLimitAmount !== null ? parseFloat(customLimitAmount) || 0 : 0;
 
     // Update Wallet / Liquid Balance if provided
     if (walletBalance !== null && !isNaN(parseFloat(walletBalance))) {
@@ -153,13 +174,18 @@ export async function POST(req) {
         "occupationCategory" = $10,
         "occupationSubRole" = $11,
         "leaveDaysSchedule" = $12,
+        "customLimitFrequency" = COALESCE($13, "customLimitFrequency"),
+        "customLimitAmount" = COALESCE($14, "customLimitAmount"),
+        "activeLimitMode" = COALESCE($15, "activeLimitMode"),
         "updatedAt" = NOW()
-      WHERE "id" = $13
+      WHERE "id" = $16
       RETURNING 
         id, email, "fullName", "baseCurrency",
         "monthlyIncome"::float, "spouseIncome"::float, "otherIncome"::float, "partTimeIncome"::float,
         "payCycleDay", "maritalStatus", "gender", "dependentsCount",
-        "occupationCategory", "occupationSubRole", "leaveDaysSchedule", "isOnboarded", "updatedAt"
+        "occupationCategory", "occupationSubRole", "leaveDaysSchedule",
+        "customLimitFrequency", "customLimitAmount"::float, "activeLimitMode",
+        "isOnboarded", "updatedAt"
     `, [
       fullName || null,
       cleanMonthly,
@@ -173,6 +199,9 @@ export async function POST(req) {
       occupationCategory,
       occupationSubRole,
       leaveDaysSchedule,
+      customLimitFrequency,
+      cleanCustomLimit,
+      activeLimitMode,
       userId,
     ]);
 
