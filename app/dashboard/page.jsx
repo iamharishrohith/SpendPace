@@ -12,6 +12,7 @@ import BottomNav from "@/components/BottomNav";
 import QuickSpendTracker from "@/components/QuickSpendTracker";
 import FinancialNewsRadar from "@/components/FinancialNewsRadar";
 import DownloadMonthlyPdfBtn from "@/components/DownloadMonthlyPdfBtn";
+import EmailReportBtn from "@/components/EmailReportBtn";
 import GoalShortageAlert from "@/components/GoalShortageAlert";
 import AIDiagnosticsCard from "@/components/AIDiagnosticsCard";
 import AICashflowAdvisorModal from "@/components/AICashflowAdvisorModal";
@@ -159,6 +160,7 @@ export default function DashboardPage() {
             </button>
 
             <DownloadMonthlyPdfBtn />
+            <EmailReportBtn />
 
             <button
               onClick={() => setIsAddModalOpen(true)}

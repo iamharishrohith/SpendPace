@@ -31,7 +31,13 @@ import {
   UserCheck,
   CalendarCheck,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Mail,
+  Send,
+  Key,
+  Lock,
+  Server,
+  Check
 } from "lucide-react";
 
 const OCCUPATION_OPTIONS = [
@@ -54,6 +60,23 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
+
+  // SMTP Server & Automated Reports State
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState(587);
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPass, setSmtpPass] = useState("");
+  const [smtpFrom, setSmtpFrom] = useState("");
+  const [smtpSecure, setSmtpSecure] = useState(false);
+  const [emailWeeklyReport, setEmailWeeklyReport] = useState(true);
+  const [emailMonthlyReport, setEmailMonthlyReport] = useState(true);
+  const [reportRecipientEmail, setReportRecipientEmail] = useState("");
+  const [hasSmtpPassword, setHasSmtpPassword] = useState(false);
+  const [lastWeeklySent, setLastWeeklySent] = useState(null);
+  const [lastMonthlySent, setLastMonthlySent] = useState(null);
+  const [smtpTesting, setSmtpTesting] = useState(false);
+  const [reportSending, setReportSending] = useState(null);
+  const [smtpStatusMessage, setSmtpStatusMessage] = useState(null);
 
   // Original fetched data for delta comparison
   const [originalData, setOriginalData] = useState(null);
@@ -115,6 +138,18 @@ export default function SettingsPage() {
       setLeaveDaysSchedule(u.leaveDaysSchedule || "WEEKENDS");
       setLiabilities(data.liabilities || []);
       setMoneyLent(data.moneyLent || []);
+
+      setSmtpHost(u.smtpHost || "");
+      setSmtpPort(u.smtpPort || 587);
+      setSmtpUser(u.smtpUser || "");
+      setSmtpFrom(u.smtpFrom || "");
+      setSmtpSecure(Boolean(u.smtpSecure));
+      setEmailWeeklyReport(u.emailWeeklyReport !== false);
+      setEmailMonthlyReport(u.emailMonthlyReport !== false);
+      setReportRecipientEmail(u.reportRecipientEmail || u.email || "");
+      setHasSmtpPassword(Boolean(u.hasSmtpPassword));
+      setLastWeeklySent(u.lastWeeklyReportSentAt || null);
+      setLastMonthlySent(u.lastMonthlyReportSentAt || null);
     } catch (err) {
       console.error("Settings load error:", err);
       setStatusMessage({ type: "error", text: err.message });
@@ -290,6 +325,102 @@ export default function SettingsPage() {
       setOriginalData({ user: json.user, liabilities: json.liabilities, moneyLent });
       setStatusMessage({ type: "success", text: "Profile and predictive pace recalibrated successfully!" });
       setTimeout(() => setStatusMessage(null), 4000);
+  // Test SMTP connection via backend config API
+  const handleTestSmtp = async () => {
+    setSmtpTesting(true);
+    setSmtpStatusMessage(null);
+    try {
+      const res = await fetch("/api/smtp/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test",
+          smtpHost,
+          smtpPort: parseInt(smtpPort, 10) || 587,
+          smtpUser,
+          smtpPass,
+          smtpFrom,
+          smtpSecure,
+          reportRecipientEmail,
+        }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        setSmtpStatusMessage({ type: "success", text: data.message });
+      } else {
+        setSmtpStatusMessage({ type: "error", text: data.error || "SMTP test failed. Please verify credentials." });
+      }
+    } catch (err) {
+      setSmtpStatusMessage({ type: "error", text: err.message });
+    } finally {
+      setSmtpTesting(false);
+    }
+  };
+
+  // Dispatch on-demand report
+  const handleSendReportNow = async (type) => {
+    setReportSending(type);
+    setSmtpStatusMessage(null);
+    try {
+      const res = await fetch("/api/notifications/send-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          recipient: reportRecipientEmail,
+        }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        setSmtpStatusMessage({
+          type: "success",
+          text: data.message || (type === "weekly" ? "Weekly digest dispatched!" : "Monthly statement dispatched!"),
+        });
+        if (type === "weekly") setLastWeeklySent(new Date().toISOString());
+        else setLastMonthlySent(new Date().toISOString());
+      } else {
+        setSmtpStatusMessage({ type: "error", text: data.error || "Failed to dispatch report." });
+      }
+    } catch (err) {
+      setSmtpStatusMessage({ type: "error", text: err.message });
+    } finally {
+      setReportSending(null);
+    }
+  };
+
+  // Dedicated Save SMTP Config
+  const handleSaveSmtp = async () => {
+    setSaving(true);
+    setSmtpStatusMessage(null);
+    try {
+      const res = await fetch("/api/smtp/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save",
+          smtpHost,
+          smtpPort: parseInt(smtpPort, 10) || 587,
+          smtpUser,
+          smtpPass,
+          smtpFrom,
+          smtpSecure,
+          emailWeeklyReport,
+          emailMonthlyReport,
+          reportRecipientEmail,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save SMTP settings");
+      setSmtpStatusMessage({ type: "success", text: "SMTP configuration and report schedules saved successfully!" });
+      if (smtpPass) setHasSmtpPassword(true);
+      setTimeout(() => setSmtpStatusMessage(null), 4000);
+    } catch (err) {
+      setSmtpStatusMessage({ type: "error", text: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
     } catch (err) {
       console.error("Save error:", err);
       setStatusMessage({ type: "error", text: err.message });
@@ -1054,6 +1185,251 @@ export default function SettingsPage() {
           </div>
         </div>
       </>
+    )}
+
+    {activeTab === "smtp" && (
+      <div className="space-y-6">
+        {/* Status Toast */}
+        {smtpStatusMessage && (
+          <div className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between animate-in fade-in-0 ${
+            smtpStatusMessage.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/25 text-rose-600 dark:text-rose-400"
+          }`}>
+            <span>{smtpStatusMessage.text}</span>
+            <button type="button" onClick={() => setSmtpStatusMessage(null)} className="text-slate-400 hover:text-white">✕</button>
+          </div>
+        )}
+
+        {/* Card 1: SMTP Server Configuration */}
+        <div className="rounded-3xl fintech-card p-6 sm:p-8 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-black/5 dark:border-white/5 pb-4 gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500">
+                <Server className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  SMTP Server Configuration
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Connect your custom email transport (Gmail, Zoho, SendGrid, Amazon SES, or custom mail server)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${
+                smtpHost && smtpUser
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25"
+                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25"
+              }`}>
+                <span className="w-2 h-2 rounded-full bg-current animate-pulse"></span>
+                {smtpHost && smtpUser ? "SMTP Configured" : "Awaiting Credentials"}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                SMTP Host / Server
+              </label>
+              <input
+                type="text"
+                value={smtpHost}
+                onChange={(e) => setSmtpHost(e.target.value)}
+                placeholder="e.g. smtp.gmail.com or smtp.sendgrid.net"
+                className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-black/[0.03] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                SMTP Port
+              </label>
+              <input
+                type="number"
+                value={smtpPort}
+                onChange={(e) => setSmtpPort(e.target.value)}
+                placeholder="587 (TLS) or 465 (SSL)"
+                className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-black/[0.03] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                SMTP Username / Mailbox
+              </label>
+              <input
+                type="text"
+                value={smtpUser}
+                onChange={(e) => setSmtpUser(e.target.value)}
+                placeholder="e.g. user@gmail.com or apiKey"
+                className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-black/[0.03] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                SMTP Password / App Password
+              </label>
+              <input
+                type="password"
+                value={smtpPass}
+                onChange={(e) => setSmtpPass(e.target.value)}
+                placeholder={hasSmtpPassword ? "•••••••• (Password Saved - Enter to replace)" : "Enter SMTP Password or App Password"}
+                className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-black/[0.03] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                From Sender Display
+              </label>
+              <input
+                type="text"
+                value={smtpFrom}
+                onChange={(e) => setSmtpFrom(e.target.value)}
+                placeholder='e.g. "SpendPace Financials" <reports@yourdomain.com>'
+                className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-black/[0.03] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                Recipient Email (Primary / Accountant)
+              </label>
+              <input
+                type="email"
+                value={reportRecipientEmail}
+                onChange={(e) => setReportRecipientEmail(e.target.value)}
+                placeholder="e.g. yourname@gmail.com"
+                className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-black/[0.03] dark:bg-white/[0.05] border border-black/10 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="smtpSecureCheckbox"
+              checked={smtpSecure}
+              onChange={(e) => setSmtpSecure(e.target.checked)}
+              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="smtpSecureCheckbox" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Enforce SSL/TLS Secure Handshake (Required for port 465)
+            </label>
+          </div>
+        </div>
+
+        {/* Card 2: Automated Dispatch Schedules & One-Tap Reports */}
+        <div className="rounded-3xl fintech-card p-6 sm:p-8 space-y-6">
+          <div className="flex items-center gap-2.5 border-b border-black/5 dark:border-white/5 pb-4">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+              <Mail className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Automated Report Schedules & On-Demand Dispatch
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Choose automated schedules or trigger instantaneous verified HTML financial summaries
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Weekly Schedule */}
+            <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                  Weekly Financial Digest
+                </span>
+                <input
+                  type="checkbox"
+                  checked={emailWeeklyReport}
+                  onChange={(e) => setEmailWeeklyReport(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                />
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Dispatches a 7-day spending velocity report, goal increments, and pace health score every Sunday.
+              </p>
+              {lastWeeklySent && (
+                <div className="text-[11px] text-slate-400">
+                  Last sent: {new Date(lastWeeklySent).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={reportSending !== null}
+                onClick={() => handleSendReportNow("weekly")}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all disabled:opacity-50"
+              >
+                {reportSending === "weekly" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                <span>Send 7-Day Digest Now</span>
+              </button>
+            </div>
+
+            {/* Monthly Schedule */}
+            <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                  Monthly Statement & Ledger
+                </span>
+                <input
+                  type="checkbox"
+                  checked={emailMonthlyReport}
+                  onChange={(e) => setEmailMonthlyReport(e.target.checked)}
+                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Dispatches full 30-day pay cycle statement, fixed liability deductions, and 6-month ML forecasts on cycle close.
+              </p>
+              {lastMonthlySent && (
+                <div className="text-[11px] text-slate-400">
+                  Last sent: {new Date(lastMonthlySent).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={reportSending !== null}
+                onClick={() => handleSendReportNow("monthly")}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-50"
+              >
+                {reportSending === "monthly" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                <span>Send Monthly Statement Now</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Action Row */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-black/5 dark:border-white/5">
+            <button
+              type="button"
+              disabled={smtpTesting}
+              onClick={handleTestSmtp}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200 transition-all disabled:opacity-50 w-full sm:w-auto"
+            >
+              {smtpTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-amber-500" />}
+              <span>Test SMTP & Send Ping Email</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSaveSmtp}
+              className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition-all active:scale-98 disabled:opacity-50 w-full sm:w-auto"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              <span>Save SMTP & Automation Config</span>
+            </button>
+          </div>
+        </div>
+      </div>
     )}
   </main>
 

@@ -33,6 +33,17 @@ export async function GET(req) {
       ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitFrequency" TEXT DEFAULT 'DAY';
       ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitAmount" DECIMAL(12, 2) DEFAULT 0.00;
       ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "activeLimitMode" TEXT DEFAULT 'DAILY';
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpHost" TEXT DEFAULT '';
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpPort" INTEGER DEFAULT 587;
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpUser" TEXT DEFAULT '';
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpPass" TEXT DEFAULT '';
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpFrom" TEXT DEFAULT '';
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpSecure" BOOLEAN DEFAULT FALSE;
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailWeeklyReport" BOOLEAN DEFAULT TRUE;
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailMonthlyReport" BOOLEAN DEFAULT TRUE;
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "reportRecipientEmail" TEXT DEFAULT '';
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastWeeklyReportSentAt" TIMESTAMPTZ;
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastMonthlyReportSentAt" TIMESTAMPTZ;
     `);
 
     const userRes = await query(`
@@ -45,6 +56,17 @@ export async function GET(req) {
         COALESCE("customLimitFrequency", 'DAY') as "customLimitFrequency",
         COALESCE("customLimitAmount"::float, 0) as "customLimitAmount",
         COALESCE("activeLimitMode", 'DAILY') as "activeLimitMode",
+        COALESCE("smtpHost", '') as "smtpHost",
+        COALESCE("smtpPort", 587) as "smtpPort",
+        COALESCE("smtpUser", '') as "smtpUser",
+        CASE WHEN "smtpPass" IS NOT NULL AND length("smtpPass") > 0 THEN true ELSE false END as "hasSmtpPassword",
+        COALESCE("smtpFrom", '') as "smtpFrom",
+        COALESCE("smtpSecure", false) as "smtpSecure",
+        COALESCE("emailWeeklyReport", true) as "emailWeeklyReport",
+        COALESCE("emailMonthlyReport", true) as "emailMonthlyReport",
+        COALESCE("reportRecipientEmail", '') as "reportRecipientEmail",
+        "lastWeeklyReportSentAt",
+        "lastMonthlyReportSentAt",
         "isOnboarded", "createdAt", "updatedAt"
       FROM "User"
       WHERE id = $1
@@ -204,6 +226,40 @@ export async function POST(req) {
       activeLimitMode,
       userId,
     ]);
+
+    // Optional SMTP fields update if passed
+    if (body.smtpHost !== undefined || body.emailWeeklyReport !== undefined || body.emailMonthlyReport !== undefined) {
+      const {
+        smtpHost = "",
+        smtpPort = 587,
+        smtpUser = "",
+        smtpPass = "",
+        smtpFrom = "",
+        smtpSecure = false,
+        emailWeeklyReport = true,
+        emailMonthlyReport = true,
+        reportRecipientEmail = "",
+      } = body;
+      if (smtpPass && smtpPass.trim().length > 0) {
+        await query(`
+          UPDATE "User"
+          SET 
+            "smtpHost" = $1, "smtpPort" = $2, "smtpUser" = $3, "smtpPass" = $4,
+            "smtpFrom" = $5, "smtpSecure" = $6, "emailWeeklyReport" = $7,
+            "emailMonthlyReport" = $8, "reportRecipientEmail" = $9
+          WHERE id = $10
+        `, [smtpHost.trim(), parseInt(smtpPort, 10) || 587, smtpUser.trim(), smtpPass.trim(), smtpFrom.trim(), Boolean(smtpSecure), Boolean(emailWeeklyReport), Boolean(emailMonthlyReport), reportRecipientEmail.trim() || user.email, userId]);
+      } else {
+        await query(`
+          UPDATE "User"
+          SET 
+            "smtpHost" = $1, "smtpPort" = $2, "smtpUser" = $3,
+            "smtpFrom" = $4, "smtpSecure" = $5, "emailWeeklyReport" = $6,
+            "emailMonthlyReport" = $7, "reportRecipientEmail" = $8
+          WHERE id = $9
+        `, [smtpHost.trim(), parseInt(smtpPort, 10) || 587, smtpUser.trim(), smtpFrom.trim(), Boolean(smtpSecure), Boolean(emailWeeklyReport), Boolean(emailMonthlyReport), reportRecipientEmail.trim() || user.email, userId]);
+      }
+    }
 
     // Synchronize liabilities
     await query(`DELETE FROM "Liability" WHERE "userId" = $1`, [userId]);
