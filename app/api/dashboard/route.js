@@ -129,6 +129,10 @@ export async function GET(req) {
       const otherIncome = parseFloat(user.otherIncome) || 0;
       const totalHouseholdInflow = monthlyIncome + spouseIncome + partTimeIncome + otherIncome;
 
+      const effectiveWalletBalance = totalWalletBalance > 0
+        ? totalWalletBalance
+        : Math.max(0, totalHouseholdInflow - monthSpent);
+
       const totalDebtMonthly = liabilities.reduce((sum, item) => sum + (parseFloat(item.monthlyPayment) || 0), 0);
       const baselineLivingCost = 0;
       const committedBills = totalDebtMonthly;
@@ -144,7 +148,32 @@ export async function GET(req) {
         daysRemaining = Math.max(1, (daysInMonth - currentDay) + payCycleDay);
       }
 
-      const totalDiscretionary = Math.max(0, totalHouseholdInflow - committedBills);
+      // 1. Automatic Goal Allocation directly from Salary (no manual deposit needed)
+      let monthlyGoalAllocation = 0;
+      for (const g of goals) {
+        if (g.isCompleted) continue;
+        const target = parseFloat(g.targetAmount) || 0;
+        const current = parseFloat(g.currentAmount) || 0;
+        const remaining = Math.max(0, target - current);
+        if (remaining <= 0) continue;
+
+        const targetDate = new Date(g.targetDate || `${now.getFullYear() + 1}-01-01`);
+        const diffMs = targetDate.getTime() - now.getTime();
+        const goalDaysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+        const goalMonthsRemaining = Math.max(1, Math.ceil(goalDaysRemaining / 30));
+        const autoMonthlyGoalNeed = Math.round(remaining / goalMonthsRemaining);
+        monthlyGoalAllocation += autoMonthlyGoalNeed;
+      }
+
+      // 2. Personal Savings Wallet / Piggy Bank (10% automated salary reserve for future)
+      const monthlyPiggyBank = Math.round(totalHouseholdInflow * 0.10);
+
+      // 3. Autonomous Daily Safe-to-Spend strictly AFTER deducting:
+      // - Committed EMIs/Bills
+      // - Automatic Goal Allocations
+      // - Monthly Piggy Bank Personal Savings!
+      const totalCommittedAndSaved = committedBills + monthlyGoalAllocation + monthlyPiggyBank;
+      const totalDiscretionary = Math.max(0, totalHouseholdInflow - totalCommittedAndSaved);
       const remainingDiscretionary = Math.max(0, totalDiscretionary - monthSpent);
       const rawSafeDaily = daysRemaining > 0 ? Math.round(remainingDiscretionary / daysRemaining) : remainingDiscretionary;
 
@@ -230,7 +259,7 @@ export async function GET(req) {
           totalSpent,
           monthSpent,
           todaySpent,
-          totalWalletBalance,
+          totalWalletBalance: effectiveWalletBalance,
           monthlyIncome,
           spouseIncome,
           partTimeIncome,
@@ -239,6 +268,9 @@ export async function GET(req) {
           totalDebtMonthly,
           baselineLivingCost,
           committedBills,
+          totalCommittedAndSaved,
+          monthlyGoalAllocation,
+          monthlyPiggyBank,
           daysRemaining,
           totalDiscretionary,
           remainingDiscretionary,
