@@ -107,6 +107,7 @@ export async function POST(req) {
       occupationCategory = "SALARIED",
       occupationSubRole = "",
       leaveDaysSchedule = "WEEKENDS",
+      walletBalance = null,
       liabilities = [],
     } = body;
 
@@ -116,6 +117,25 @@ export async function POST(req) {
     const cleanOther = parseFloat(otherIncome) || 0;
     const cleanPayCycle = parseInt(payCycleDay, 10) || 1;
     const cleanDependents = parseInt(dependentsCount, 10) || 0;
+
+    // Update Wallet / Liquid Balance if provided
+    if (walletBalance !== null && !isNaN(parseFloat(walletBalance))) {
+      const cleanWallet = parseFloat(walletBalance);
+      const accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 AND "isDefault" = true LIMIT 1`, [userId]);
+      if (accRes.rows.length > 0) {
+        await query(`UPDATE "Account" SET balance = $1 WHERE id = $2`, [cleanWallet, accRes.rows[0].id]);
+      } else {
+        const anyAcc = await query(`SELECT id FROM "Account" WHERE "userId" = $1 LIMIT 1`, [userId]);
+        if (anyAcc.rows.length > 0) {
+          await query(`UPDATE "Account" SET balance = $1 WHERE id = $2`, [cleanWallet, anyAcc.rows[0].id]);
+        } else {
+          await query(`
+            INSERT INTO "Account" (id, "userId", name, "accountType", balance, "isDefault", "createdAt")
+            VALUES (gen_random_uuid(), $1, 'Cash Wallet', 'SAVINGS_BANK', $2, true, NOW())
+          `, [userId, cleanWallet]);
+        }
+      }
+    }
 
     // Update User
     const updatedUserRes = await query(`

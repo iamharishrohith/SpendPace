@@ -38,6 +38,9 @@ export async function GET(req) {
         liabilities: [],
         metrics: {
           totalSpent: 0,
+          monthSpent: 0,
+          todaySpent: 0,
+          totalWalletBalance: 0,
           monthlyIncome: 0,
           spouseIncome: 0,
           partTimeIncome: 0,
@@ -84,7 +87,9 @@ export async function GET(req) {
             FROM "Liability" WHERE "userId" = $1 ORDER BY "monthlyPayment" DESC
           ) l) as liabilities,
 
-          (SELECT COALESCE(SUM(amount), 0)::float FROM "Transaction" WHERE "userId" = $1 AND type = 'EXPENSE') as "totalSpent",
+          (SELECT COALESCE(SUM(amount), 0)::float FROM "Transaction" WHERE "userId" = $1 AND type = 'EXPENSE') as "monthSpent",
+          (SELECT COALESCE(SUM(amount), 0)::float FROM "Transaction" WHERE "userId" = $1 AND type = 'EXPENSE' AND DATE("transactionDate") = CURRENT_DATE) as "todaySpent",
+          (SELECT COALESCE(SUM(balance), 0)::float FROM "Account" WHERE "userId" = $1 AND balance > 0) as "totalWalletBalance",
 
           (SELECT COALESCE(json_agg(tx), '[]'::json) FROM (
             SELECT 
@@ -113,7 +118,10 @@ export async function GET(req) {
       const goals = dashboardData.goals || [];
       const liabilities = dashboardData.liabilities || [];
       const transactions = dashboardData.recentTransactions || [];
-      const totalSpent = parseFloat(dashboardData.totalSpent) || 0;
+      const monthSpent = parseFloat(dashboardData.monthSpent) || 0;
+      const todaySpent = parseFloat(dashboardData.todaySpent) || 0;
+      const totalWalletBalance = parseFloat(dashboardData.totalWalletBalance) || 0;
+      const totalSpent = monthSpent;
 
       const monthlyIncome = parseFloat(user.monthlyIncome) || 0;
       const spouseIncome = parseFloat(user.spouseIncome) || 0;
@@ -126,12 +134,19 @@ export async function GET(req) {
       const committedBills = totalDebtMonthly;
 
       const now = new Date();
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const daysRemaining = Math.max(1, daysInMonth - now.getDate());
+      const currentDay = now.getDate();
+      const payCycleDay = parseInt(user.payCycleDay, 10) || 1;
+      let daysRemaining = 1;
+      if (currentDay < payCycleDay) {
+        daysRemaining = payCycleDay - currentDay;
+      } else {
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        daysRemaining = Math.max(1, (daysInMonth - currentDay) + payCycleDay);
+      }
 
       const totalDiscretionary = Math.max(0, totalHouseholdInflow - committedBills);
-      const remainingDiscretionary = Math.max(0, totalDiscretionary - totalSpent);
-      const rawSafeDaily = Math.round(remainingDiscretionary / daysRemaining);
+      const remainingDiscretionary = Math.max(0, totalDiscretionary - monthSpent);
+      const rawSafeDaily = daysRemaining > 0 ? Math.round(remainingDiscretionary / daysRemaining) : remainingDiscretionary;
 
       // Analyze goals for Shortage Alert & Automated Pacing Shield
       let highestShortageGoal = null;
@@ -213,6 +228,9 @@ export async function GET(req) {
         liabilities,
         metrics: {
           totalSpent,
+          monthSpent,
+          todaySpent,
+          totalWalletBalance,
           monthlyIncome,
           spouseIncome,
           partTimeIncome,
@@ -227,7 +245,7 @@ export async function GET(req) {
           safeDaily,
           rawSafeDaily,
           goalTightenReduction: totalGoalTightenReduction,
-          burnPercentage: totalDiscretionary > 0 ? Math.round((totalSpent / totalDiscretionary) * 100) : 0,
+          burnPercentage: totalDiscretionary > 0 ? Math.round((monthSpent / totalDiscretionary) * 100) : 0,
         },
         shortageAlert: highestShortageGoal,
       };
