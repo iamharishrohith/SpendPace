@@ -34,6 +34,7 @@ enum IngestionSource {
 model User {
   id                 String         @id @default(uuid())
   email              String         @unique
+  passwordHash       String?
   fullName           String
   baseCurrency       String         @default("INR")
   monthlyIncome      Decimal        @default(0.00) @db.Decimal(12, 2)

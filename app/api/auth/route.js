@@ -1,5 +1,9 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "spendpace_secure_jwt_token_secret_key_2026_prod";
 
 // Disposable email domain blacklist for SSR protection
 const DISPOSABLE_EMAIL_DOMAINS = new Set([
@@ -70,8 +74,6 @@ export async function POST(req) {
       return NextResponse.json({ success: false, errors }, { status: 422 });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-
     let authenticatedUser = null;
 
     if (mode === "register") {
@@ -84,17 +86,20 @@ export async function POST(req) {
         }, { status: 400 });
       }
 
-      // Create new user in PostgreSQL
+      // Hash password using bcrypt
+      const passwordHash = await bcrypt.hash(password, 10);
       const name = fullName?.trim() || cleanEmail.split("@")[0];
+
+      // Create new user in PostgreSQL
       const newUser = await query(`
         INSERT INTO "User" (
-          id, email, "fullName", "baseCurrency", "monthlyIncome", "payCycleDay", 
+          id, email, "passwordHash", "fullName", "baseCurrency", "monthlyIncome", "payCycleDay", 
           "maritalStatus", "gender", "dependentsCount", "occupationCategory", "isOnboarded", 
           "createdAt", "updatedAt"
         )
-        VALUES (gen_random_uuid(), $1, $2, 'INR', 0.00, 1, 'SINGLE', 'MALE', 0, 'SALARIED', false, NOW(), NOW())
+        VALUES (gen_random_uuid(), $1, $2, $3, 'INR', 0.00, 1, 'SINGLE', 'MALE', 0, 'SALARIED', false, NOW(), NOW())
         RETURNING id, email, "fullName", "baseCurrency", "monthlyIncome", "payCycleDay", "maritalStatus", "gender", "dependentsCount", "occupationCategory", "isOnboarded"
-      `, [cleanEmail, name]);
+      `, [cleanEmail, passwordHash, name]);
 
       authenticatedUser = newUser.rows[0];
 
@@ -118,9 +123,9 @@ export async function POST(req) {
           (gen_random_uuid(), $1, 'Entertainment', 'Film', '#6366F1', true)
       `, [authenticatedUser.id]);
     } else {
-      // Login mode
+      // Login mode - strictly verify credentials
       const res = await query(`
-        SELECT id, email, "fullName", "baseCurrency", "monthlyIncome", "payCycleDay", 
+        SELECT id, email, "passwordHash", "fullName", "baseCurrency", "monthlyIncome", "payCycleDay", 
                "maritalStatus", "gender", "dependentsCount", "occupationCategory", "occupationSubRole",
                "spouseIncome", "otherIncome", "isOnboarded"
         FROM "User" 
@@ -129,23 +134,34 @@ export async function POST(req) {
       `, [cleanEmail]);
 
       if (res.rows.length === 0) {
-        // Auto-provision if user does not exist
-        const newUser = await query(`
-          INSERT INTO "User" (
-            id, email, "fullName", "baseCurrency", "monthlyIncome", "payCycleDay", 
-            "maritalStatus", "gender", "dependentsCount", "occupationCategory", "isOnboarded", 
-            "createdAt", "updatedAt"
-          )
-          VALUES (gen_random_uuid(), $1, $2, 'INR', 0.00, 1, 'SINGLE', 'MALE', 0, 'SALARIED', false, NOW(), NOW())
-          RETURNING id, email, "fullName", "baseCurrency", "monthlyIncome", "payCycleDay", "maritalStatus", "gender", "dependentsCount", "occupationCategory", "isOnboarded"
-        `, [cleanEmail, cleanEmail.split("@")[0]]);
-        authenticatedUser = newUser.rows[0];
-      } else {
-        authenticatedUser = res.rows[0];
+        return NextResponse.json({
+          success: false,
+          errors: { general: "Invalid email or password." }
+        }, { status: 401 });
       }
+
+      const userRecord = res.rows[0];
+
+      // Verify password hash
+      if (userRecord.passwordHash) {
+        const isPasswordValid = await bcrypt.compare(password, userRecord.passwordHash);
+        if (!isPasswordValid) {
+          return NextResponse.json({
+            success: false,
+            errors: { password: "Incorrect password. Please try again." }
+          }, { status: 401 });
+        }
+      } else {
+        // Legacy user password migration: store hash upon first successful login
+        const newHash = await bcrypt.hash(password, 10);
+        await query(`UPDATE "User" SET "passwordHash" = $1 WHERE id = $2`, [newHash, userRecord.id]);
+      }
+
+      delete userRecord.passwordHash;
+      authenticatedUser = userRecord;
     }
 
-    // Set secure HTTP-only session cookie
+    // Generate cryptographically signed JWT session token (30 days validity)
     const sessionPayload = {
       userId: authenticatedUser.id,
       email: authenticatedUser.email,
@@ -153,16 +169,20 @@ export async function POST(req) {
       isOnboarded: Boolean(authenticatedUser.isOnboarded),
     };
 
+    const token = jwt.sign(sessionPayload, JWT_SECRET, { expiresIn: "30d" });
+
     const response = NextResponse.json({
       success: true,
+      token,
       user: authenticatedUser,
       redirect: authenticatedUser.isOnboarded ? "/dashboard" : "/onboarding",
     });
 
+    // Set secure HTTP session cookie
     response.cookies.set({
       name: "spendpace_session",
-      value: JSON.stringify(sessionPayload),
-      httpOnly: false, // accessible for client-side state synchronization
+      value: token,
+      httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 30, // 30 days

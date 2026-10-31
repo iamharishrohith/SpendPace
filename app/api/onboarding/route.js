@@ -1,12 +1,20 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "spendpace_secure_jwt_token_secret_key_2026_prod";
 
 export async function POST(req) {
   try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse("Unauthorized: User session required for onboarding.");
+    }
+
+    const targetUserId = user.id;
     const body = await req.json();
     const {
-      userId,
-      email,
       maritalStatus = "SINGLE",
       gender = "MALE",
       dependentsCount = 0,
@@ -18,39 +26,6 @@ export async function POST(req) {
       payCycleDay = 1,
       liabilities = [],
     } = body;
-
-    let targetUserId = userId;
-
-    // If userId not provided in body, try to resolve from email
-    if (!targetUserId && email) {
-      const emailRes = await query(`SELECT id FROM "User" WHERE LOWER(email) = LOWER($1) LIMIT 1`, [email.trim()]);
-      if (emailRes.rows.length > 0) {
-        targetUserId = emailRes.rows[0].id;
-      }
-    }
-
-    // If still not resolved, try cookie
-    if (!targetUserId) {
-      const cookie = req.cookies.get("spendpace_session")?.value;
-      if (cookie) {
-        try {
-          const session = JSON.parse(cookie);
-          targetUserId = session.userId;
-        } catch (e) {}
-      }
-    }
-
-    if (!targetUserId) {
-      if (process.env.NODE_ENV !== "production" || process.env.ALLOW_DEMO_FALLBACK === "true") {
-        const userRes = await query(`SELECT id FROM "User" ORDER BY "createdAt" DESC LIMIT 1`);
-        if (userRes.rows.length > 0) {
-          targetUserId = userRes.rows[0].id;
-        }
-      }
-      if (!targetUserId) {
-        return NextResponse.json({ success: false, error: "Unauthorized: User session required." }, { status: 401 });
-      }
-    }
 
     const cleanMonthlyIncome = parseFloat(monthlyIncome) || 0;
     const cleanSpouseIncome = parseFloat(spouseIncome) || 0;
@@ -164,16 +139,19 @@ export async function POST(req) {
       isOnboarded: true,
     };
 
+    const token = jwt.sign(sessionPayload, JWT_SECRET, { expiresIn: "30d" });
+
     const response = NextResponse.json({
       success: true,
+      token,
       user: updatedUser,
       message: "Financial profile successfully configured.",
     });
 
     response.cookies.set({
       name: "spendpace_session",
-      value: JSON.stringify(sessionPayload),
-      httpOnly: false,
+      value: token,
+      httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 30,
