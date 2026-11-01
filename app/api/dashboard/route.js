@@ -61,10 +61,13 @@ export async function GET(req) {
       });
     }
 
-    // 2. Fetch all user data with Upstash Redis caching (sub-15ms response)
+    // 2. Fetch user data with Upstash Redis caching (bypass if no-cache or x-refresh requested)
+    const isBypassCache = req.headers?.get?.("cache-control") === "no-cache" || 
+                          req.headers?.get?.("x-refresh") === "true" ||
+                          req.headers?.["cache-control"] === "no-cache";
     const cacheKey = `spendpace:dashboard:${user.id}`;
 
-    const cachedPayload = await getOrSetCache(cacheKey, async () => {
+    const fetchFreshDashboard = async () => {
       const consolidatedRes = await query(`
         SELECT 
           (SELECT COALESCE(json_agg(a), '[]'::json) FROM (
@@ -88,7 +91,7 @@ export async function GET(req) {
           ) l) as liabilities,
 
           (SELECT COALESCE(SUM(amount), 0)::float FROM "Transaction" WHERE "userId" = $1 AND type = 'EXPENSE') as "monthSpent",
-          (SELECT COALESCE(SUM(amount), 0)::float FROM "Transaction" WHERE "userId" = $1 AND type = 'EXPENSE' AND DATE("transactionDate") = CURRENT_DATE) as "todaySpent",
+          (SELECT COALESCE(SUM(amount), 0)::float FROM "Transaction" WHERE "userId" = $1 AND type = 'EXPENSE' AND DATE("transactionDate" + INTERVAL '5 hours 30 minutes') = DATE(NOW() + INTERVAL '5 hours 30 minutes')) as "todaySpent",
           (SELECT COALESCE(SUM(balance), 0)::float FROM "Account" WHERE "userId" = $1 AND balance > 0) as "totalWalletBalance",
 
           (SELECT COALESCE(json_agg(tx), '[]'::json) FROM (
@@ -267,6 +270,7 @@ export async function GET(req) {
           totalSpent,
           monthSpent,
           todaySpent,
+          todayRemaining: Math.max(0, safeDaily - todaySpent),
           totalWalletBalance: effectiveWalletBalance,
           monthlyIncome,
           spouseIncome,
@@ -289,9 +293,13 @@ export async function GET(req) {
         },
         shortageAlert: highestShortageGoal,
       };
-    }, 60);
+    };
 
-    return NextResponse.json(cachedPayload);
+    const finalPayload = isBypassCache 
+      ? await fetchFreshDashboard() 
+      : await getOrSetCache(cacheKey, fetchFreshDashboard, 60);
+
+    return NextResponse.json(finalPayload);
   } catch (error) {
     if (error.digest === "NEXT_PRERENDER_INTERRUPTED" || error.message?.includes("bail out of prerendering")) {
       throw error;

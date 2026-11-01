@@ -28,11 +28,22 @@ export async function GET(req) {
       LIMIT $2
     `, [userId, limit]);
 
+    const parsedLogs = res.rows.map(row => {
+      let meta = row.metadata;
+      if (typeof meta === "string") {
+        try { meta = JSON.parse(meta); } catch (e) {}
+      }
+      return {
+        ...row,
+        metadata: meta
+      };
+    });
+
     if (format === "download") {
       const exportJson = JSON.stringify({
         exportedAt: new Date().toISOString(),
         user: { id: user.id, email: user.email, name: user.fullName },
-        logs: res.rows
+        logs: parsedLogs
       }, null, 2);
 
       return new Response(exportJson, {
@@ -46,8 +57,8 @@ export async function GET(req) {
 
     return NextResponse.json({
       success: true,
-      count: res.rows.length,
-      logs: res.rows
+      count: parsedLogs.length,
+      logs: parsedLogs
     });
   } catch (error) {
     console.error("Audit logs GET error:", error);
@@ -66,6 +77,11 @@ export async function POST(req) {
     const body = await req.json();
     const { action = "CLIENT_EVENT", metadata = {} } = body;
 
+    const clientMetadata = typeof metadata === "object" && metadata !== null ? { ...metadata } : { raw: metadata };
+    if (!clientMetadata.timestampIST) {
+      clientMetadata.timestampIST = new Date(Date.now() + 19800000).toISOString().replace("T", " ").replace("Z", " IST");
+    }
+
     const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
     const ua = req.headers.get("user-agent") || "SpendPaceApp";
 
@@ -78,7 +94,7 @@ export async function POST(req) {
       typeof action === "string" ? action.substring(0, 100) : "EVENT",
       typeof ip === "string" ? ip.split(",")[0].trim() : "127.0.0.1",
       typeof ua === "string" ? ua.substring(0, 255) : "App",
-      JSON.stringify(metadata)
+      JSON.stringify(clientMetadata)
     ]);
 
     return NextResponse.json({
