@@ -42,6 +42,26 @@ async function handleDailyRollover(req) {
           const nominalSafeDaily = Math.max(100, Math.round(primaryBalance / 30));
           const unspentAllocation = Math.max(0, nominalSafeDaily - spentToday);
 
+          // Automated Micro-Investing: Sweep 50% of unspent allocation into Personal Piggy Bank Savings
+          let sweptToSavings = 0;
+          if (unspentAllocation > 10) {
+            sweptToSavings = Math.round(unspentAllocation * 0.5);
+            // Check if Piggy Bank account exists or update User Settings
+            const savingsAccRes = await client.query(`
+              SELECT id, balance::float FROM "Account"
+              WHERE "userId" = $1 AND (name ILIKE '%Piggy%' OR name ILIKE '%Savings%')
+              LIMIT 1
+            `, [user.id]);
+
+            if (savingsAccRes.rows.length) {
+              await client.query(`
+                UPDATE "Account"
+                SET balance = balance + $1, "updatedAt" = NOW()
+                WHERE id = $2
+              `, [sweptToSavings, savingsAccRes.rows[0].id]);
+            }
+          }
+
           await client.query(`
             INSERT INTO "AuditLog" (id, "userId", action, "ipAddress", "userAgent", metadata, timestamp)
             VALUES (gen_random_uuid(), $1, 'DAILY_ROLLOVER', '127.0.0.1', 'CronWorker', $2, NOW())
@@ -51,6 +71,7 @@ async function handleDailyRollover(req) {
               spentToday,
               nominalSafeDaily,
               unspentAllocation,
+              sweptToSavings,
               rolloverDate: new Date().toISOString(),
               status: "COMPLETED"
             })
