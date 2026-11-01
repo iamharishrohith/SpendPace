@@ -2,8 +2,6 @@ import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(req) {
   try {
     const user = await getAuthenticatedUser(req);

@@ -2,8 +2,6 @@ import { query, withTransaction } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { invalidateCache } from "@/lib/redis";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(req) {
   return handleDailyRollover(req);
 }
