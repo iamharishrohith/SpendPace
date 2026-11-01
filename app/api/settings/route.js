@@ -153,16 +153,16 @@ export async function POST(req) {
       liabilities = [],
     } = body;
 
-    const cleanMonthly = parseFloat(monthlyIncome) || 0;
-    const cleanSpouse = parseFloat(spouseIncome) || 0;
-    const cleanPartTime = parseFloat(partTimeIncome) || 0;
-    const cleanOther = parseFloat(otherIncome) || 0;
-    const cleanPayCycle = parseInt(payCycleDay, 10) || 1;
-    const cleanDependents = parseInt(dependentsCount, 10) || 0;
-    const cleanCustomLimit = customLimitAmount !== null ? parseFloat(customLimitAmount) || 0 : 0;
+    const cleanMonthly = monthlyIncome !== undefined ? (parseFloat(monthlyIncome) || 0) : null;
+    const cleanSpouse = spouseIncome !== undefined ? (parseFloat(spouseIncome) || 0) : null;
+    const cleanPartTime = partTimeIncome !== undefined ? (parseFloat(partTimeIncome) || 0) : null;
+    const cleanOther = otherIncome !== undefined ? (parseFloat(otherIncome) || 0) : null;
+    const cleanPayCycle = payCycleDay !== undefined ? (parseInt(payCycleDay, 10) || 1) : null;
+    const cleanDependents = dependentsCount !== undefined ? (parseInt(dependentsCount, 10) || 0) : null;
+    const cleanCustomLimit = customLimitAmount !== undefined && customLimitAmount !== null ? (parseFloat(customLimitAmount) || 0) : null;
 
     // Update Wallet / Liquid Balance if provided
-    if (walletBalance !== null && !isNaN(parseFloat(walletBalance))) {
+    if (walletBalance !== null && walletBalance !== undefined && !isNaN(parseFloat(walletBalance))) {
       const cleanWallet = parseFloat(walletBalance);
       const accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 AND "isDefault" = true LIMIT 1`, [userId]);
       if (accRes.rows.length > 0) {
@@ -180,22 +180,22 @@ export async function POST(req) {
       }
     }
 
-    // Update User
+    // Update User (Safely preserving existing fields via COALESCE)
     const updatedUserRes = await query(`
       UPDATE "User"
       SET 
         "fullName" = COALESCE($1, "fullName"),
-        "monthlyIncome" = $2,
-        "spouseIncome" = $3,
-        "otherIncome" = $4,
-        "partTimeIncome" = $5,
-        "payCycleDay" = $6,
-        "maritalStatus" = $7,
-        "gender" = $8,
-        "dependentsCount" = $9,
-        "occupationCategory" = $10,
-        "occupationSubRole" = $11,
-        "leaveDaysSchedule" = $12,
+        "monthlyIncome" = COALESCE($2, "monthlyIncome"),
+        "spouseIncome" = COALESCE($3, "spouseIncome"),
+        "otherIncome" = COALESCE($4, "otherIncome"),
+        "partTimeIncome" = COALESCE($5, "partTimeIncome"),
+        "payCycleDay" = COALESCE($6, "payCycleDay"),
+        "maritalStatus" = COALESCE($7, "maritalStatus"),
+        "gender" = COALESCE($8, "gender"),
+        "dependentsCount" = COALESCE($9, "dependentsCount"),
+        "occupationCategory" = COALESCE($10, "occupationCategory"),
+        "occupationSubRole" = COALESCE($11, "occupationSubRole"),
+        "leaveDaysSchedule" = COALESCE($12, "leaveDaysSchedule"),
         "customLimitFrequency" = COALESCE($13, "customLimitFrequency"),
         "customLimitAmount" = COALESCE($14, "customLimitAmount"),
         "activeLimitMode" = COALESCE($15, "activeLimitMode"),
@@ -215,15 +215,15 @@ export async function POST(req) {
       cleanOther,
       cleanPartTime,
       cleanPayCycle,
-      maritalStatus,
-      gender,
+      maritalStatus || null,
+      gender || null,
       cleanDependents,
-      occupationCategory,
-      occupationSubRole,
-      leaveDaysSchedule,
-      customLimitFrequency,
+      occupationCategory || null,
+      occupationSubRole || null,
+      leaveDaysSchedule || null,
+      customLimitFrequency || null,
       cleanCustomLimit,
-      activeLimitMode,
+      activeLimitMode || null,
       userId,
     ]);
 
@@ -261,36 +261,38 @@ export async function POST(req) {
       }
     }
 
-    // Synchronize liabilities
-    await query(`DELETE FROM "Liability" WHERE "userId" = $1`, [userId]);
+    // Synchronize liabilities only if explicitly provided in request body
+    if (body.liabilities !== undefined && Array.isArray(liabilities)) {
+      await query(`DELETE FROM "Liability" WHERE "userId" = $1`, [userId]);
 
-    if (Array.isArray(liabilities) && liabilities.length > 0) {
-      for (const item of liabilities) {
-        if (!item.name || !item.monthlyPayment) continue;
-        const monthly = parseFloat(item.monthlyPayment) || 0;
-        if (monthly <= 0) continue;
+      if (liabilities.length > 0) {
+        for (const item of liabilities) {
+          if (!item.name || !item.monthlyPayment) continue;
+          const monthly = parseFloat(item.monthlyPayment) || 0;
+          if (monthly <= 0) continue;
 
-        const outstanding = item.totalOutstanding ? parseFloat(item.totalOutstanding) : null;
-        const rate = item.interestRate ? parseFloat(item.interestRate) : null;
-        const tenure = item.tenureMonthsRemaining ? parseInt(item.tenureMonthsRemaining, 10) : null;
-        const isInformal = Boolean(item.isInformal);
+          const outstanding = item.totalOutstanding ? parseFloat(item.totalOutstanding) : null;
+          const rate = item.interestRate ? parseFloat(item.interestRate) : null;
+          const tenure = item.tenureMonthsRemaining ? parseInt(item.tenureMonthsRemaining, 10) : null;
+          const isInformal = Boolean(item.isInformal);
 
-        await query(`
-          INSERT INTO "Liability" (
-            id, "userId", name, category, "monthlyPayment", "totalOutstanding", 
-            "interestRate", "tenureMonthsRemaining", "isInformal", "createdAt"
-          )
-          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, NOW())
-        `, [
-          userId,
-          item.name,
-          item.category || "General EMI",
-          monthly,
-          outstanding,
-          rate,
-          tenure,
-          isInformal,
-        ]);
+          await query(`
+            INSERT INTO "Liability" (
+              id, "userId", name, category, "monthlyPayment", "totalOutstanding", 
+              "interestRate", "tenureMonthsRemaining", "isInformal", "createdAt"
+            )
+            VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, NOW())
+          `, [
+            userId,
+            item.name,
+            item.category || "General EMI",
+            monthly,
+            outstanding,
+            rate,
+            tenure,
+            isInformal,
+          ]);
+        }
       }
     }
 
