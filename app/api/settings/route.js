@@ -3,6 +3,39 @@ import { NextResponse } from "next/server";
 import { invalidateCache } from "@/lib/redis";
 import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth";
 
+async function ensureSettingsColumns() {
+  await query(`
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "leaveDaysSchedule" TEXT DEFAULT 'WEEKENDS';
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitFrequency" TEXT DEFAULT 'DAY';
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitAmount" DECIMAL(12, 2) DEFAULT 0.00;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "activeLimitMode" TEXT DEFAULT 'DAILY';
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpHost" TEXT DEFAULT '';
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpPort" INTEGER DEFAULT 587;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpUser" TEXT DEFAULT '';
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpPass" TEXT DEFAULT '';
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpFrom" TEXT DEFAULT '';
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpSecure" BOOLEAN DEFAULT FALSE;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailWeeklyReport" BOOLEAN DEFAULT TRUE;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailMonthlyReport" BOOLEAN DEFAULT TRUE;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "reportRecipientEmail" TEXT DEFAULT '';
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastWeeklyReportSentAt" TIMESTAMPTZ;
+    ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastMonthlyReportSentAt" TIMESTAMPTZ;
+    CREATE TABLE IF NOT EXISTS "MoneyLent" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "userId" TEXT NOT NULL,
+      "borrowerName" TEXT NOT NULL,
+      phone TEXT,
+      amount DECIMAL(12, 2) NOT NULL,
+      "lentDate" TIMESTAMPTZ DEFAULT NOW(),
+      notes TEXT,
+      "isRecovered" BOOLEAN DEFAULT FALSE,
+      "recoveredAt" TIMESTAMPTZ,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS "idx_moneylent_user" ON "MoneyLent"("userId");
+  `);
+}
+
 export async function GET(req) {
   try {
     const user = await getAuthenticatedUser(req);
@@ -11,40 +44,7 @@ export async function GET(req) {
     }
     const userId = user.id;
 
-    // Ensure table and column exist seamlessly
-    await query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "leaveDaysSchedule" TEXT DEFAULT 'WEEKENDS'`);
-    await query(`
-      CREATE TABLE IF NOT EXISTS "MoneyLent" (
-        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        "userId" TEXT NOT NULL,
-        "borrowerName" TEXT NOT NULL,
-        phone TEXT,
-        amount DECIMAL(12, 2) NOT NULL,
-        "lentDate" TIMESTAMPTZ DEFAULT NOW(),
-        notes TEXT,
-        "isRecovered" BOOLEAN DEFAULT FALSE,
-        "recoveredAt" TIMESTAMPTZ,
-        "createdAt" TIMESTAMPTZ DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS "idx_moneylent_user" ON "MoneyLent"("userId");
-    `);
-
-    await query(`
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitFrequency" TEXT DEFAULT 'DAY';
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitAmount" DECIMAL(12, 2) DEFAULT 0.00;
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "activeLimitMode" TEXT DEFAULT 'DAILY';
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpHost" TEXT DEFAULT '';
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpPort" INTEGER DEFAULT 587;
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpUser" TEXT DEFAULT '';
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpPass" TEXT DEFAULT '';
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpFrom" TEXT DEFAULT '';
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "smtpSecure" BOOLEAN DEFAULT FALSE;
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailWeeklyReport" BOOLEAN DEFAULT TRUE;
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailMonthlyReport" BOOLEAN DEFAULT TRUE;
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "reportRecipientEmail" TEXT DEFAULT '';
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastWeeklyReportSentAt" TIMESTAMPTZ;
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastMonthlyReportSentAt" TIMESTAMPTZ;
-    `);
+    await ensureSettingsColumns();
 
     const userRes = await query(`
       SELECT 
@@ -127,11 +127,7 @@ export async function POST(req) {
     const body = await req.json();
 
     // Ensure custom limit columns exist
-    await query(`
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitFrequency" TEXT DEFAULT 'DAY';
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "customLimitAmount" DECIMAL(12, 2) DEFAULT 0.00;
-      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "activeLimitMode" TEXT DEFAULT 'DAILY';
-    `);
+    await ensureSettingsColumns();
 
     const {
       fullName,
