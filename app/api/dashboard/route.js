@@ -173,9 +173,17 @@ export async function GET(req) {
       // - Automatic Goal Allocations
       // - Monthly Piggy Bank Personal Savings!
       const totalCommittedAndSaved = committedBills + monthlyGoalAllocation + monthlyPiggyBank;
-      const totalDiscretionary = Math.max(0, totalHouseholdInflow - totalCommittedAndSaved);
+      const baseDiscretionaryPool = totalHouseholdInflow > 0
+        ? Math.max(0, totalHouseholdInflow - totalCommittedAndSaved)
+        : Math.max(0, effectiveWalletBalance - totalDebtMonthly);
+      const totalDiscretionary = baseDiscretionaryPool;
       const remainingDiscretionary = Math.max(0, totalDiscretionary - monthSpent);
-      const rawSafeDaily = daysRemaining > 0 ? Math.round(remainingDiscretionary / daysRemaining) : remainingDiscretionary;
+      const computedSafeDaily = daysRemaining > 0 
+        ? Math.round(remainingDiscretionary / daysRemaining) 
+        : remainingDiscretionary;
+      const rawSafeDaily = computedSafeDaily > 0 
+        ? computedSafeDaily 
+        : (effectiveWalletBalance > 0 ? Math.max(50, Math.round(effectiveWalletBalance / daysRemaining)) : 500);
 
       // Analyze goals for Shortage Alert & Automated Pacing Shield
       let highestShortageGoal = null;

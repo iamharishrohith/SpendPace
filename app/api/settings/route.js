@@ -159,14 +159,17 @@ export async function POST(req) {
 
     // Update Wallet / Liquid Balance if provided
     if (walletBalance !== null && walletBalance !== undefined && !isNaN(parseFloat(walletBalance))) {
-      const cleanWallet = parseFloat(walletBalance);
+      const cleanWallet = Math.max(0, parseFloat(walletBalance));
       const accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 AND "isDefault" = true LIMIT 1`, [userId]);
       if (accRes.rows.length > 0) {
+        // Zero other liquid accounts so total sum of accounts matches cleanWallet exactly
+        await query(`UPDATE "Account" SET balance = 0 WHERE "userId" = $1 AND "isDefault" = false AND "accountType" IN ('UPI_WALLET', 'SAVINGS_BANK')`, [userId]);
         await query(`UPDATE "Account" SET balance = $1 WHERE id = $2`, [cleanWallet, accRes.rows[0].id]);
       } else {
-        const anyAcc = await query(`SELECT id FROM "Account" WHERE "userId" = $1 LIMIT 1`, [userId]);
+        const anyAcc = await query(`SELECT id FROM "Account" WHERE "userId" = $1 AND "accountType" != 'CREDIT_CARD' LIMIT 1`, [userId]);
         if (anyAcc.rows.length > 0) {
-          await query(`UPDATE "Account" SET balance = $1 WHERE id = $2`, [cleanWallet, anyAcc.rows[0].id]);
+          await query(`UPDATE "Account" SET balance = 0 WHERE "userId" = $1 AND id != $2 AND "accountType" IN ('UPI_WALLET', 'SAVINGS_BANK')`, [userId, anyAcc.rows[0].id]);
+          await query(`UPDATE "Account" SET balance = $1, "isDefault" = true WHERE id = $2`, [cleanWallet, anyAcc.rows[0].id]);
         } else {
           await query(`
             INSERT INTO "Account" (id, "userId", name, "accountType", balance, "isDefault", "createdAt")
@@ -174,6 +177,20 @@ export async function POST(req) {
           `, [userId, cleanWallet]);
         }
       }
+
+      try {
+        const ip = req.headers?.get?.("x-forwarded-for") || req.headers?.["x-forwarded-for"] || "127.0.0.1";
+        const ua = req.headers?.get?.("user-agent") || req.headers?.["user-agent"] || "SpendPaceClient";
+        await query(`
+          INSERT INTO "AuditLog" (id, "userId", action, "ipAddress", "userAgent", metadata, timestamp)
+          VALUES (gen_random_uuid(), $1, 'WALLET_REANCHOR', $2, $3, $4, NOW())
+        `, [
+          userId, 
+          typeof ip === "string" ? ip.split(",")[0].trim() : "127.0.0.1", 
+          typeof ua === "string" ? ua.substring(0, 255) : "App",
+          JSON.stringify({ reanchoredBalance: cleanWallet })
+        ]);
+      } catch (logErr) {}
     }
 
     // Update User (Safely preserving existing fields via COALESCE)

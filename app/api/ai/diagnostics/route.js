@@ -12,11 +12,17 @@ export async function GET(req) {
     }
     const userId = user.id;
 
-    const cacheKey = `spendpace:diagnostics:${userId}`;
+    const { searchParams } = new URL(req.url);
+    const forceRefresh = searchParams.get("refresh") === "true";
 
-    const report = await getOrSetCache(cacheKey, async () => {
+    const cacheKey = `spendpace:diagnostics:${userId}`;
+    if (forceRefresh) {
+      await invalidateCache(cacheKey);
+    }
+
+    const computeReport = async () => {
       // 1. Fetch user profile, liabilities, goals, and recent 30-day transactions
-      const [userRes, liabRes, goalsRes, txRes] = await Promise.all([
+      const [userRes, liabRes, goalsRes, txRes, accRes] = await Promise.all([
         query(`
           SELECT id, "fullName", "monthlyIncome"::float, "spouseIncome"::float, 
                  "otherIncome"::float, COALESCE("partTimeIncome", 0)::float as "partTimeIncome",
@@ -33,12 +39,14 @@ export async function GET(req) {
           ORDER BY tx."transactionDate" DESC
           LIMIT 35
         `, [userId]),
+        query(`SELECT COALESCE(SUM(balance), 0)::float as "totalWallet" FROM "Account" WHERE "userId" = $1 AND balance > 0`, [userId]),
       ]);
 
       const user = userRes.rows[0] || {};
       const liabilities = liabRes.rows || [];
       const goals = goalsRes.rows || [];
       const transactions = txRes.rows || [];
+      const totalWallet = accRes.rows[0]?.totalWallet || 0;
 
       const monthlyIncome = parseFloat(user.monthlyIncome) || 0;
       const partTimeIncome = parseFloat(user.partTimeIncome) || 0;
@@ -48,8 +56,10 @@ export async function GET(req) {
 
       const totalDebt = liabilities.reduce((sum, l) => sum + (parseFloat(l.monthlyPayment) || 0), 0);
       const committedBills = totalDebt;
-      const totalDiscretionary = Math.max(0, totalHouseholdInflow - committedBills);
-      const safeDaily = Math.round(totalDiscretionary / 30);
+      const totalDiscretionary = totalHouseholdInflow > 0 
+        ? Math.max(0, totalHouseholdInflow - committedBills)
+        : Math.max(0, totalWallet - totalDebt);
+      const safeDaily = Math.max(50, Math.round(totalDiscretionary / 30));
 
       const metrics = {
         monthlyIncome,
@@ -57,13 +67,23 @@ export async function GET(req) {
         totalHouseholdInflow,
         totalDiscretionary,
         safeDaily,
+        totalWallet,
         totalSpent: transactions.filter(t => t.type === "EXPENSE").reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0),
       };
 
       return await diagnoseFinancialHealth({ user, transactions, metrics, liabilities, goals });
-    }, 300); // 5 min cache
+    };
 
-    return NextResponse.json(report);
+    const report = forceRefresh 
+      ? await computeReport() 
+      : await getOrSetCache(cacheKey, computeReport, 300);
+
+    return NextResponse.json({
+      ...report,
+      agentName: "Finance Agent",
+      poweredBy: "Groq LPU (openai/gpt-oss-120b)",
+      analyzedAt: new Date().toISOString()
+    });
   } catch (err) {
     console.error("Diagnostics API route error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
