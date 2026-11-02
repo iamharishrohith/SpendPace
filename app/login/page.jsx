@@ -258,7 +258,7 @@ export default function LoginPage() {
                 </label>
                 {email.length > 0 && (
                   <span className={`text-[10px] font-bold flex items-center gap-1 ${
-                    hasCapsInEmail || !hasAtSymbol || !hasValidDomain || isDisposableDomain
+                    hasCapsInEmail || !hasAtSymbol || !hasValidDomain || isDisposableDomain || !isEmailFormatValid
                       ? "text-rose-500"
                       : "text-emerald-500"
                   }`}>
@@ -280,7 +280,7 @@ export default function LoginPage() {
               </div>
               <div className="relative flex items-center">
                 <Mail className={`absolute left-3.5 w-4 h-4 ${
-                  email.length > 0 && (hasCapsInEmail || !hasAtSymbol || !hasValidDomain)
+                  email.length > 0 && (hasCapsInEmail || !hasAtSymbol || !hasValidDomain || !isEmailFormatValid)
                     ? "text-rose-400"
                     : isEmailFormatValid
                     ? "text-emerald-500"
