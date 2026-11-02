@@ -130,6 +130,7 @@ export async function GET(req) {
       const spouseIncome = parseFloat(user.spouseIncome) || 0;
       const partTimeIncome = parseFloat(user.partTimeIncome) || 0;
       const otherIncome = parseFloat(user.otherIncome) || 0;
+      const dependentsCount = parseInt(user.dependentsCount, 10) || 0;
       const totalHouseholdInflow = monthlyIncome + spouseIncome + partTimeIncome + otherIncome;
 
       const effectiveWalletBalance = totalWalletBalance > 0
