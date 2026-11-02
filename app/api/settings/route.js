@@ -131,30 +131,30 @@ export async function POST(req) {
 
     const {
       fullName,
-      monthlyIncome = 0,
-      spouseIncome = 0,
-      partTimeIncome = 0,
-      otherIncome = 0,
-      payCycleDay = 1,
-      maritalStatus = "SINGLE",
-      gender = "MALE",
-      dependentsCount = 0,
-      occupationCategory = "SALARIED",
-      occupationSubRole = "",
-      leaveDaysSchedule = "WEEKENDS",
+      monthlyIncome,
+      spouseIncome,
+      partTimeIncome,
+      otherIncome,
+      payCycleDay,
+      maritalStatus,
+      gender,
+      dependentsCount,
+      occupationCategory,
+      occupationSubRole,
+      leaveDaysSchedule,
       walletBalance = null,
-      customLimitFrequency = "DAY",
-      customLimitAmount = null,
-      activeLimitMode = "DAILY",
-      liabilities = [],
+      customLimitFrequency,
+      customLimitAmount,
+      activeLimitMode,
+      liabilities,
     } = body;
 
-    const cleanMonthly = monthlyIncome !== undefined ? (parseFloat(monthlyIncome) || 0) : null;
-    const cleanSpouse = spouseIncome !== undefined ? (parseFloat(spouseIncome) || 0) : null;
-    const cleanPartTime = partTimeIncome !== undefined ? (parseFloat(partTimeIncome) || 0) : null;
-    const cleanOther = otherIncome !== undefined ? (parseFloat(otherIncome) || 0) : null;
-    const cleanPayCycle = payCycleDay !== undefined ? (parseInt(payCycleDay, 10) || 1) : null;
-    const cleanDependents = dependentsCount !== undefined ? (parseInt(dependentsCount, 10) || 0) : null;
+    const cleanMonthly = monthlyIncome !== undefined && monthlyIncome !== null ? (parseFloat(monthlyIncome) || 0) : null;
+    const cleanSpouse = spouseIncome !== undefined && spouseIncome !== null ? (parseFloat(spouseIncome) || 0) : null;
+    const cleanPartTime = partTimeIncome !== undefined && partTimeIncome !== null ? (parseFloat(partTimeIncome) || 0) : null;
+    const cleanOther = otherIncome !== undefined && otherIncome !== null ? (parseFloat(otherIncome) || 0) : null;
+    const cleanPayCycle = payCycleDay !== undefined && payCycleDay !== null ? (parseInt(payCycleDay, 10) || 1) : null;
+    const cleanDependents = dependentsCount !== undefined && dependentsCount !== null ? (parseInt(dependentsCount, 10) || 0) : null;
     const cleanCustomLimit = customLimitAmount !== undefined && customLimitAmount !== null ? (parseFloat(customLimitAmount) || 0) : null;
 
     // Update Wallet / Liquid Balance if provided
