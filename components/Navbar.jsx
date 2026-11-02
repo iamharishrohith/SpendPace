@@ -64,7 +64,10 @@ export default function Navbar({ onOpenAddModal, onOpenCommandBar }) {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch (e) {}
-    localStorage.removeItem("spendpace_user");
+    try {
+      localStorage.removeItem("spendpace_user");
+      localStorage.removeItem("spendpace_dashboard_cache");
+    } catch (e) {}
     setCurrentUser(null);
     window.location.href = "/login";
   };

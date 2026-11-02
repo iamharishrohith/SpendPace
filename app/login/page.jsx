@@ -151,6 +151,11 @@ export default function LoginPage() {
         return;
       }
 
+      // Clear prior user caches so new account does not inherit previous user data
+      try {
+        localStorage.removeItem("spendpace_dashboard_cache");
+      } catch (e) {}
+
       // Store authenticated session and navigate according to onboarding state
       localStorage.setItem("spendpace_user", JSON.stringify(data.user));
       const targetPath = data.redirect || (data.user?.isOnboarded ? "/dashboard" : "/onboarding");
