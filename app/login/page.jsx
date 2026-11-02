@@ -159,7 +159,9 @@ export default function LoginPage() {
       // Store authenticated session and navigate according to onboarding state
       localStorage.setItem("spendpace_user", JSON.stringify(data.user));
       const targetPath = data.redirect || (data.user?.isOnboarded ? "/dashboard" : "/onboarding");
-      router.push(targetPath);
+      
+      // Use full window redirect to guarantee fresh state and cookie recognition
+      window.location.href = targetPath;
     } catch (err) {
       setFieldErrors({ general: "Network error: Unable to contact authentication server." });
     } finally {
