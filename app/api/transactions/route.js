@@ -58,7 +58,7 @@ export async function POST(req) {
       idempotencyKey = null
     } = body;
 
-    const VALID_SOURCES = ["MANUAL", "UPI_SCREENSHOT_OCR", "RECEIPT_OCR", "RECURRING_AUTO", "GESTURE_PULSE"];
+    const VALID_SOURCES = ["MANUAL", "UPI_SCREENSHOT_OCR", "RECEIPT_OCR", "RECURRING_AUTO", "GESTURE_PULSE", "BANK_SMS"];
     const cleanSource = VALID_SOURCES.includes(source) ? source : "MANUAL";
     const cleanAmount = parseFloat(amount) || 0;
 
