@@ -168,40 +168,54 @@ export async function POST(req) {
         return NextResponse.json({ success: false, error: targetError }, { status: 400 });
       }
 
-      const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure,
-        auth: { user: userAuth, pass },
-        connectionTimeout: 10000,
-      });
+      try {
+        const transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure,
+          auth: { user: userAuth, pass },
+          connectionTimeout: 12000,
+        });
 
-      await transporter.verify();
+        await transporter.verify();
 
-      const testHtml = `
-        <div style="font-family: -apple-system, sans-serif; background: #0B0C10; color: #FFFFFF; padding: 24px; border-radius: 14px; max-width: 520px;">
-          <h2 style="color: #10B981; margin-top: 0;">✓ SpendPace SMTP Connected!</h2>
-          <p style="color: #94A3B8; font-size: 13px; line-height: 1.5;">
-            This email confirms that your custom SMTP server (<strong>${escapeHtml(host)}:${port}</strong>) is verified and ready for automated weekly and monthly financial digests.
-          </p>
-          <div style="padding: 12px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; font-size: 12px;">
-            Recipient: <strong>${escapeHtml(toEmail)}</strong><br/>
-            Timestamp: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
+        const testHtml = `
+          <div style="font-family: -apple-system, sans-serif; background: #0B0C10; color: #FFFFFF; padding: 24px; border-radius: 14px; max-width: 520px;">
+            <h2 style="color: #10B981; margin-top: 0;">✓ SpendPace SMTP Connected!</h2>
+            <p style="color: #94A3B8; font-size: 13px; line-height: 1.5;">
+              This email confirms that your custom SMTP server (<strong>${escapeHtml(host)}:${port}</strong>) is verified and ready for automated weekly and monthly financial digests.
+            </p>
+            <div style="padding: 12px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; font-size: 12px;">
+              Recipient: <strong>${escapeHtml(toEmail)}</strong><br/>
+              Timestamp: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
+            </div>
           </div>
-        </div>
-      `;
+        `;
 
-      await transporter.sendMail({
-        from,
-        to: toEmail,
-        subject: "SpendPace SMTP Connection Test - Success",
-        html: testHtml,
-      });
+        await transporter.sendMail({
+          from,
+          to: toEmail,
+          subject: "SpendPace SMTP Connection Test - Success",
+          html: testHtml,
+        });
 
-      return NextResponse.json({
-        success: true,
-        message: `SMTP verified! A test confirmation email was dispatched to ${toEmail}.`,
-      });
+        return NextResponse.json({
+          success: true,
+          message: `SMTP verified! A test confirmation email was dispatched to ${toEmail}.`,
+        });
+      } catch (mailErr) {
+        console.error("SMTP verification/send failed:", mailErr);
+        let errorDetail = mailErr.message || "Failed to connect to SMTP server";
+        if (mailErr.code === "EAUTH") {
+          errorDetail = "Authentication failed: Please check your SMTP username and password (for Gmail, generate an App Password).";
+        } else if (mailErr.code === "ETIMEDOUT" || mailErr.code === "ESOCKET") {
+          errorDetail = `Connection timeout to ${host}:${port}. Verify port (465 with SSL or 587 with TLS) and firewall settings.`;
+        }
+        return NextResponse.json({
+          success: false,
+          error: errorDetail,
+        }, { status: 400 });
+      }
     }
 
     // 2. Action: Save SMTP Configuration
