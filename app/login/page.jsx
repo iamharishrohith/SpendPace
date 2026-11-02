@@ -35,9 +35,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // Client-Side Email Validation (Normalize lowercase + valid email format)
-  const isStandardEmail = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email.trim());
-  const isEmailValid = email ? isStandardEmail : null;
+  // Strict Client-Side Email Validation: No uppercase letters, valid @ symbol, and standard domain format
+  const hasCapsInEmail = /[A-Z]/.test(email);
+  const hasAtSymbol = email.includes("@");
+  const emailParts = email.trim().split("@");
+  const emailDomain = emailParts.length === 2 ? emailParts[1] : "";
+  const hasValidDomain = emailDomain.includes(".") && emailDomain.split(".")[1]?.length >= 2;
+  const isEmailFormatValid = !hasCapsInEmail && /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email.trim());
+  const isEmailValid = email ? isEmailFormatValid : null;
+
+  // Disposable domain blacklist
+  const DISPOSABLE_DOMAINS = ["mailinator.com", "10minutemail.com", "tempmail.com", "guerrillamail.com", "yopmail.com", "trashmail.com"];
+  const isDisposableDomain = isEmailFormatValid && DISPOSABLE_DOMAINS.includes(emailDomain.toLowerCase());
 
   // Client-Side Password Entropy Check (5 security rules)
   const checkPasswordRules = (pass) => {
@@ -77,7 +86,23 @@ export default function LoginPage() {
     setFieldErrors({});
 
     // Client preliminary checks
-    if (!isStandardEmail) {
+    if (hasCapsInEmail) {
+      setFieldErrors((prev) => ({ ...prev, email: "Email must not contain capital letters. Please use lowercase only." }));
+      return;
+    }
+    if (!hasAtSymbol) {
+      setFieldErrors((prev) => ({ ...prev, email: "Email must contain an '@' symbol." }));
+      return;
+    }
+    if (!hasValidDomain) {
+      setFieldErrors((prev) => ({ ...prev, email: "Please enter a valid email domain (e.g. gmail.com)." }));
+      return;
+    }
+    if (isDisposableDomain) {
+      setFieldErrors((prev) => ({ ...prev, email: "Disposable email addresses are not permitted." }));
+      return;
+    }
+    if (!isEmailFormatValid) {
       setFieldErrors((prev) => ({ ...prev, email: "Please enter a valid email address (e.g. name@domain.com)." }));
       return;
     }
@@ -226,17 +251,42 @@ export default function LoginPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Email Address
                 </label>
-                {isEmailValid === true && !fieldErrors.email && (
-                  <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Valid Email
+                {email.length > 0 && (
+                  <span className={`text-[10px] font-bold flex items-center gap-1 ${
+                    hasCapsInEmail || !hasAtSymbol || !hasValidDomain || isDisposableDomain
+                      ? "text-rose-500"
+                      : "text-emerald-500"
+                  }`}>
+                    {hasCapsInEmail ? (
+                      <><AlertCircle className="w-3 h-3" /> No caps allowed</>
+                    ) : !hasAtSymbol ? (
+                      <><AlertCircle className="w-3 h-3" /> Missing @</>
+                    ) : !hasValidDomain ? (
+                      <><AlertCircle className="w-3 h-3" /> Incomplete domain</>
+                    ) : isDisposableDomain ? (
+                      <><AlertCircle className="w-3 h-3" /> Disposable not allowed</>
+                    ) : isEmailFormatValid ? (
+                      <><CheckCircle2 className="w-3 h-3" /> Valid Email</>
+                    ) : (
+                      <><AlertCircle className="w-3 h-3" /> Invalid format</>
+                    )}
                   </span>
                 )}
               </div>
               <div className="relative flex items-center">
-                <Mail className="absolute left-3.5 w-4 h-4 text-slate-400" />
+                <Mail className={`absolute left-3.5 w-4 h-4 ${
+                  email.length > 0 && (hasCapsInEmail || !hasAtSymbol || !hasValidDomain)
+                    ? "text-rose-400"
+                    : isEmailFormatValid
+                    ? "text-emerald-500"
+                    : "text-slate-400"
+                }`} />
                 <input
                   type="email"
                   required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="name@example.com"
                   value={email}
                   onChange={(e) => {
@@ -244,9 +294,9 @@ export default function LoginPage() {
                     if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
                   }}
                   className={`w-full pl-10 pr-4 py-3 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 ${
-                    fieldErrors.email 
+                    fieldErrors.email || (email.length > 0 && (hasCapsInEmail || (!hasAtSymbol && email.length > 3)))
                       ? "border-rose-500 focus:ring-rose-500" 
-                      : isEmailValid === true 
+                      : isEmailFormatValid 
                       ? "border-emerald-500/50 focus:ring-emerald-500" 
                       : "border-black/10 dark:border-white/10 focus:ring-emerald-500"
                   }`}
@@ -308,43 +358,78 @@ export default function LoginPage() {
               )}
 
               {/* Register Password Rules Checklist & Strength Meter */}
-              {mode === "register" && password && (
-                <div className="mt-2 space-y-2 pt-1">
-                  <div className="flex justify-between text-[10px] font-bold text-slate-400">
-                    <span>Security Rating</span>
-                    <span className={strengthPercent === 100 ? "text-emerald-500" : strengthPercent >= 50 ? "text-amber-500" : "text-rose-500"}>
-                      {strengthPercent === 100 ? "Strong (Ready)" : strengthPercent >= 50 ? "Moderate" : "Weak"}
+              {mode === "register" && (
+                <div className="mt-2.5 p-3 rounded-xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 space-y-2">
+                  <div className="flex justify-between items-center text-[10px] font-bold">
+                    <span className="text-slate-500 dark:text-slate-400">Password Strength</span>
+                    <span className={
+                      strengthPercent === 100 
+                        ? "text-emerald-500 font-bold" 
+                        : strengthPercent >= 60 
+                        ? "text-amber-500 font-bold" 
+                        : password.length > 0
+                        ? "text-rose-500 font-bold"
+                        : "text-slate-400"
+                    }>
+                      {strengthPercent === 100 
+                        ? "Strong (Ready)" 
+                        : strengthPercent >= 60 
+                        ? "Moderate" 
+                        : password.length > 0 
+                        ? "Weak" 
+                        : "Required (5 Rules)"}
                     </span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        strengthPercent === 100 
-                          ? "bg-emerald-500" 
-                          : strengthPercent >= 50 
-                          ? "bg-amber-500" 
-                          : "bg-rose-500"
-                      }`}
-                      style={{ width: `${strengthPercent}%` }}
-                    />
                   </div>
 
-                  {/* Checklist pills */}
-                  <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-500 dark:text-slate-400 pt-1">
-                    <span className={rules.length ? "text-emerald-500 font-semibold" : ""}>
-                      {rules.length ? "✓" : "○"} 8+ Characters
+                  {/* Visual 5-segment strength bar */}
+                  <div className="grid grid-cols-5 gap-1 h-1.5 w-full">
+                    {[1, 2, 3, 4, 5].map((idx) => (
+                      <div
+                        key={idx}
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          passedCount >= idx
+                            ? strengthPercent === 100
+                              ? "bg-emerald-500"
+                              : strengthPercent >= 60
+                              ? "bg-amber-500"
+                              : "bg-rose-500"
+                            : "bg-black/10 dark:bg-white/10"
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Dynamic 5-Rule Checklist Pills */}
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px] pt-1">
+                    <span className={`flex items-center gap-1 font-medium transition-colors ${
+                      rules.length ? "text-emerald-500 font-semibold" : "text-slate-400 dark:text-slate-500"
+                    }`}>
+                      {rules.length ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <span className="w-3 h-3 inline-flex items-center justify-center text-xs">○</span>}
+                      8+ Characters
                     </span>
-                    <span className={rules.uppercase ? "text-emerald-500 font-semibold" : ""}>
-                      {rules.uppercase ? "✓" : "○"} Uppercase (A-Z)
+                    <span className={`flex items-center gap-1 font-medium transition-colors ${
+                      rules.uppercase ? "text-emerald-500 font-semibold" : "text-slate-400 dark:text-slate-500"
+                    }`}>
+                      {rules.uppercase ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <span className="w-3 h-3 inline-flex items-center justify-center text-xs">○</span>}
+                      Uppercase (A-Z)
                     </span>
-                    <span className={rules.lowercase ? "text-emerald-500 font-semibold" : ""}>
-                      {rules.lowercase ? "✓" : "○"} Lowercase (a-z)
+                    <span className={`flex items-center gap-1 font-medium transition-colors ${
+                      rules.lowercase ? "text-emerald-500 font-semibold" : "text-slate-400 dark:text-slate-500"
+                    }`}>
+                      {rules.lowercase ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <span className="w-3 h-3 inline-flex items-center justify-center text-xs">○</span>}
+                      Lowercase (a-z)
                     </span>
-                    <span className={rules.number ? "text-emerald-500 font-semibold" : ""}>
-                      {rules.number ? "✓" : "○"} Number (0-9)
+                    <span className={`flex items-center gap-1 font-medium transition-colors ${
+                      rules.number ? "text-emerald-500 font-semibold" : "text-slate-400 dark:text-slate-500"
+                    }`}>
+                      {rules.number ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <span className="w-3 h-3 inline-flex items-center justify-center text-xs">○</span>}
+                      Number (0-9)
                     </span>
-                    <span className={rules.special ? "text-emerald-500 font-semibold" : ""}>
-                      {rules.special ? "✓" : "○"} Symbol (!@#$%^&*)
+                    <span className={`flex items-center gap-1 font-medium transition-colors ${
+                      rules.special ? "text-emerald-500 font-semibold" : "text-slate-400 dark:text-slate-500"
+                    }`}>
+                      {rules.special ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <span className="w-3 h-3 inline-flex items-center justify-center text-xs">○</span>}
+                      Symbol (!@#$%^&*)
                     </span>
                   </div>
                 </div>
