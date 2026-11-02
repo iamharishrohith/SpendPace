@@ -134,6 +134,12 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = user.id;
+
     const body = await req.json();
     const {
       goalId,
@@ -157,10 +163,13 @@ export async function PATCH(req) {
           SET 
             "currentAmount" = "currentAmount" + $1,
             "isCompleted" = CASE WHEN ("currentAmount" + $1) >= "targetAmount" THEN true ELSE "isCompleted" END
-          WHERE id = $2
+          WHERE id = $2 AND "userId" = $3
           RETURNING id, "currentAmount"::float, "targetAmount"::float, "isCompleted"
-        `, [cleanAmount, goalId]);
+        `, [cleanAmount, goalId, userId]);
 
+        if (!updateRes.rows.length) {
+          return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+        }
         return NextResponse.json({ success: true, goal: updateRes.rows[0] });
       }
     }
@@ -172,10 +181,13 @@ export async function PATCH(req) {
         const updateRes = await query(`
           UPDATE "Goal"
           SET "targetDate" = "targetDate" + ($1 || ' days')::interval
-          WHERE id = $2
+          WHERE id = $2 AND "userId" = $3
           RETURNING id, "targetDate", "autoTightenPace"
-        `, [days, goalId]);
+        `, [days, goalId, userId]);
 
+        if (!updateRes.rows.length) {
+          return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+        }
         return NextResponse.json({ success: true, goal: updateRes.rows[0] });
       }
     }
@@ -185,10 +197,13 @@ export async function PATCH(req) {
       const updateRes = await query(`
         UPDATE "Goal"
         SET "autoTightenPace" = $1
-        WHERE id = $2
+        WHERE id = $2 AND "userId" = $3
         RETURNING id, "autoTightenPace"
-      `, [Boolean(autoTightenPace), goalId]);
+      `, [Boolean(autoTightenPace), goalId, userId]);
 
+      if (!updateRes.rows.length) {
+        return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+      }
       return NextResponse.json({ success: true, goal: updateRes.rows[0] });
     }
 
@@ -197,10 +212,13 @@ export async function PATCH(req) {
       const updateRes = await query(`
         UPDATE "Goal"
         SET "isCompleted" = $1
-        WHERE id = $2
+        WHERE id = $2 AND "userId" = $3
         RETURNING id, "isCompleted"
-      `, [Boolean(isCompleted), goalId]);
+      `, [Boolean(isCompleted), goalId, userId]);
 
+      if (!updateRes.rows.length) {
+        return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+      }
       return NextResponse.json({ success: true, goal: updateRes.rows[0] });
     }
 
@@ -216,6 +234,12 @@ export async function PATCH(req) {
 
 export async function DELETE(req) {
   try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = user.id;
+
     const { searchParams } = new URL(req.url);
     const goalId = searchParams.get("id");
 
@@ -223,7 +247,10 @@ export async function DELETE(req) {
       return NextResponse.json({ error: "Goal ID is required" }, { status: 400 });
     }
 
-    await query(`DELETE FROM "Goal" WHERE id = $1`, [goalId]);
+    const delRes = await query(`DELETE FROM "Goal" WHERE id = $1 AND "userId" = $2 RETURNING id`, [goalId, userId]);
+    if (!delRes.rows.length) {
+      return NextResponse.json({ error: "Goal not found" }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (err) {
     if (err.digest === "NEXT_PRERENDER_INTERRUPTED" || err.message?.includes("bail out of prerendering")) {

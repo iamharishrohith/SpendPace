@@ -102,20 +102,47 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return unauthorizedResponse();
+    }
+    const userId = user.id;
+
     const body = await req.json();
     const { itemId, isPaid, eventId, isCompleted, allocatedAmount } = body;
 
     if (itemId !== undefined) {
-      await query(`UPDATE "PlannerItem" SET "isPaid" = $1 WHERE id = $2`, [Boolean(isPaid), itemId]);
+      const updateRes = await query(
+        `UPDATE "PlannerItem" 
+         SET "isPaid" = $1 
+         WHERE id = $2 AND "plannerId" IN (SELECT id FROM "PlannerEvent" WHERE "userId" = $3)
+         RETURNING id`,
+        [Boolean(isPaid), itemId, userId]
+      );
+      if (!updateRes.rows.length) {
+        return NextResponse.json({ success: false, error: "Planner item not found" }, { status: 404 });
+      }
       return NextResponse.json({ success: true });
     }
 
     if (eventId) {
       if (isCompleted !== undefined) {
-        await query(`UPDATE "PlannerEvent" SET "isCompleted" = $1 WHERE id = $2`, [Boolean(isCompleted), eventId]);
+        const updateRes = await query(
+          `UPDATE "PlannerEvent" SET "isCompleted" = $1 WHERE id = $2 AND "userId" = $3 RETURNING id`,
+          [Boolean(isCompleted), eventId, userId]
+        );
+        if (!updateRes.rows.length) {
+          return NextResponse.json({ success: false, error: "Planner event not found" }, { status: 404 });
+        }
       }
       if (allocatedAmount !== undefined) {
-        await query(`UPDATE "PlannerEvent" SET "allocatedAmount" = $1 WHERE id = $2`, [parseFloat(allocatedAmount) || 0, eventId]);
+        const updateRes = await query(
+          `UPDATE "PlannerEvent" SET "allocatedAmount" = $1 WHERE id = $2 AND "userId" = $3 RETURNING id`,
+          [parseFloat(allocatedAmount) || 0, eventId, userId]
+        );
+        if (!updateRes.rows.length) {
+          return NextResponse.json({ success: false, error: "Planner event not found" }, { status: 404 });
+        }
       }
       return NextResponse.json({ success: true });
     }

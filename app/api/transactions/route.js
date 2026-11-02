@@ -123,11 +123,12 @@ export async function POST(req) {
       let accountId = null;
       let accountNameFound = "Salary Account";
       let balanceBefore = 0;
+      const safeAccount = (accountName || 'Salary').replace(/[%_\\]/g, '\\$&');
       let accRes = await client.query(`
         SELECT id, name, balance::float FROM "Account" 
         WHERE "userId" = $1 AND name ILIKE $2 
         LIMIT 1
-      `, [userId, `%${accountName || 'Salary'}%`]);
+      `, [userId, `%${safeAccount}%`]);
       
       if (!accRes.rows.length) {
         accRes = await client.query(`

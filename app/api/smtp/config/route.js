@@ -1,7 +1,63 @@
 import { query } from "@/lib/db";
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import dns from "dns";
 import { getAuthenticatedUser, unauthorizedResponse, escapeHtml } from "@/lib/auth";
+
+function isPrivateOrLoopbackIp(ip) {
+  if (!ip) return true;
+  if (ip.startsWith("127.")) return true;
+  if (ip.startsWith("169.254.")) return true;
+  if (ip.startsWith("10.")) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) return true;
+  if (ip.startsWith("192.168.")) return true;
+  if (ip === "0.0.0.0" || ip === "255.255.255.255") return true;
+  if (ip === "::1" || ip === "::") return true;
+  const lower = ip.toLowerCase();
+  if (lower.startsWith("fe80:") || lower.startsWith("fc00:") || lower.startsWith("fd00:")) return true;
+  return false;
+}
+
+export async function validateSmtpTarget(host, port) {
+  const cleanHost = (host || "").trim().toLowerCase();
+  if (!cleanHost) return "Host is required";
+  
+  if (
+    cleanHost === "localhost" ||
+    cleanHost.endsWith(".localhost") ||
+    cleanHost.endsWith(".internal") ||
+    cleanHost.endsWith(".local") ||
+    cleanHost.endsWith(".corp") ||
+    cleanHost.endsWith(".lan") ||
+    cleanHost.endsWith(".home") ||
+    cleanHost.endsWith(".arpa") ||
+    cleanHost === "169.254.169.254"
+  ) {
+    return "Target host is prohibited for security reasons (private or loopback network).";
+  }
+
+  const allowedPorts = [25, 465, 587, 2525];
+  if (!allowedPorts.includes(port)) {
+    return `Invalid SMTP port ${port}. Permitted ports are: ${allowedPorts.join(", ")}`;
+  }
+
+  if (isPrivateOrLoopbackIp(cleanHost)) {
+    return "Target host is prohibited (resolves to private or internal network).";
+  }
+
+  try {
+    const lookup = await dns.promises.lookup(cleanHost, { all: true });
+    for (const address of lookup) {
+      if (isPrivateOrLoopbackIp(address.address)) {
+        return `Target host resolved to a prohibited private network address (${address.address}).`;
+      }
+    }
+  } catch (dnsErr) {
+    return `Unable to resolve host ${cleanHost}: ${dnsErr.message}`;
+  }
+
+  return null;
+}
 
 // Ensure SMTP and report configuration columns exist in User table
 async function ensureSmtpColumns() {
@@ -106,6 +162,12 @@ export async function POST(req) {
         }, { status: 400 });
       }
 
+      // SSRF Protection: Validate target host is not a private IP, loopback, or metadata endpoint
+      const targetError = await validateSmtpTarget(host, port);
+      if (targetError) {
+        return NextResponse.json({ success: false, error: targetError }, { status: 400 });
+      }
+
       const transporter = nodemailer.createTransport({
         host,
         port,
@@ -157,6 +219,13 @@ export async function POST(req) {
 
     const cleanPort = parseInt(smtpPort, 10) || 587;
     const cleanRecipient = reportRecipientEmail.trim() || user.email;
+
+    if (smtpHost.trim()) {
+      const saveTargetError = await validateSmtpTarget(smtpHost.trim(), cleanPort);
+      if (saveTargetError) {
+        return NextResponse.json({ success: false, error: saveTargetError }, { status: 400 });
+      }
+    }
 
     // Only update smtpPass if non-empty string provided (preserves existing password)
     if (smtpPass && smtpPass.trim().length > 0) {

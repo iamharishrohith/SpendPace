@@ -133,82 +133,88 @@ export async function POST(req) {
       try {
         if (action.type === "LOG_EXPENSE" && action.amount) {
           const expenseAmount = parseFloat(action.amount);
-
-          // Find or fallback category
-          let catRes = await query(
-            `SELECT id, name FROM "Category" WHERE "userId" = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
-            [userId, action.category || "Dining & Food"]
-          );
-          if (!catRes.rows.length) {
-            catRes = await query(`SELECT id, name FROM "Category" WHERE "userId" = $1 LIMIT 1`, [userId]);
-          }
-          const categoryId = catRes.rows[0]?.id;
-          const categoryName = catRes.rows[0]?.name || action.category || "Expense";
-
-          // Find default account
-          let accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 AND "isDefault" = true LIMIT 1`, [userId]);
-          if (!accRes.rows.length) {
-            accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 LIMIT 1`, [userId]);
-          }
-          const accountId = accRes.rows[0]?.id;
-
-          if (categoryId && accountId) {
-            const txRes = await query(
-              `INSERT INTO "Transaction" (id, "userId", "accountId", "categoryId", amount, type, description, "transactionDate", source)
-               VALUES (gen_random_uuid(), $1, $2, $3, $4, 'EXPENSE', $5, NOW(), 'RECEIPT_OCR')
-               RETURNING id, description, amount::float, "transactionDate"`,
-              [userId, accountId, categoryId, expenseAmount, action.description || "Voice Logged Expense"]
+          if (!Number.isFinite(expenseAmount) || expenseAmount <= 0 || expenseAmount > 10000000) {
+            console.warn("AI Chat Action rejected: Invalid expense amount", action.amount);
+          } else {
+            // Find or fallback category
+            let catRes = await query(
+              `SELECT id, name FROM "Category" WHERE "userId" = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
+              [userId, action.category || "Dining & Food"]
             );
+            if (!catRes.rows.length) {
+              catRes = await query(`SELECT id, name FROM "Category" WHERE "userId" = $1 LIMIT 1`, [userId]);
+            }
+            const categoryId = catRes.rows[0]?.id;
+            const categoryName = catRes.rows[0]?.name || action.category || "Expense";
 
-            // Deduct from account balance
-            await query(`UPDATE "Account" SET balance = balance - $1 WHERE id = $2`, [expenseAmount, accountId]);
+            // Find default account
+            let accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 AND "isDefault" = true LIMIT 1`, [userId]);
+            if (!accRes.rows.length) {
+              accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 LIMIT 1`, [userId]);
+            }
+            const accountId = accRes.rows[0]?.id;
 
-            actionExecuted = {
-              type: "LOG_EXPENSE",
-              amount: expenseAmount,
-              category: categoryName,
-              description: action.description || "Expense",
-              transactionId: txRes.rows[0]?.id,
-            };
+            if (categoryId && accountId) {
+              const txRes = await query(
+                `INSERT INTO "Transaction" (id, "userId", "accountId", "categoryId", amount, type, description, "transactionDate", source)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, 'EXPENSE', $5, NOW(), 'RECEIPT_OCR')
+                 RETURNING id, description, amount::float, "transactionDate"`,
+                [userId, accountId, categoryId, expenseAmount, action.description || "Voice Logged Expense"]
+              );
+
+              // Deduct from account balance
+              await query(`UPDATE "Account" SET balance = balance - $1 WHERE id = $2`, [expenseAmount, accountId]);
+
+              actionExecuted = {
+                type: "LOG_EXPENSE",
+                amount: expenseAmount,
+                category: categoryName,
+                description: action.description || "Expense",
+                transactionId: txRes.rows[0]?.id,
+              };
+            }
           }
         } else if (action.type === "LOG_PART_TIME_INCOME" && action.amount) {
           const gigAmount = parseFloat(action.amount);
-
-          // Update User.partTimeIncome
-          const updatedUserRes = await query(
-            `UPDATE "User" 
-             SET "partTimeIncome" = COALESCE("partTimeIncome", 0) + $1 
-             WHERE id = $2 
-             RETURNING "partTimeIncome"::float`,
-            [gigAmount, userId]
-          );
-          partTime = updatedUserRes.rows[0]?.partTimeIncome || (partTime + gigAmount);
-          totalInflow = monthly + partTime;
-          safeDaily = Math.round(Math.max(0, totalInflow - (totalDebt + 24000)) / 30);
-
-          // Also insert an INCOME transaction
-          let catRes = await query(`SELECT id FROM "Category" WHERE "userId" = $1 LIMIT 1`, [userId]);
-          let accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 LIMIT 1`, [userId]);
-          const categoryId = catRes.rows[0]?.id;
-          const accountId = accRes.rows[0]?.id;
-
-          if (accountId && categoryId) {
-            await query(
-              `INSERT INTO "Transaction" (id, "userId", "accountId", "categoryId", amount, type, description, "transactionDate", source)
-               VALUES (gen_random_uuid(), $1, $2, $3, $4, 'INCOME', $5, NOW(), 'MANUAL')`,
-              [userId, accountId, categoryId, gigAmount, `Part-Time Gig: ${action.source || 'Earnings'}`]
+          if (!Number.isFinite(gigAmount) || gigAmount <= 0 || gigAmount > 10000000) {
+            console.warn("AI Chat Action rejected: Invalid income amount", action.amount);
+          } else {
+            // Update User.partTimeIncome
+            const updatedUserRes = await query(
+              `UPDATE "User" 
+               SET "partTimeIncome" = COALESCE("partTimeIncome", 0) + $1 
+               WHERE id = $2 
+               RETURNING "partTimeIncome"::float`,
+              [gigAmount, userId]
             );
-            await query(`UPDATE "Account" SET balance = balance + $1 WHERE id = $2`, [gigAmount, accountId]);
-          }
+            partTime = updatedUserRes.rows[0]?.partTimeIncome || (partTime + gigAmount);
+            totalInflow = monthly + partTime;
+            safeDaily = Math.round(Math.max(0, totalInflow - (totalDebt + 24000)) / 30);
 
-          actionExecuted = {
-            type: "LOG_PART_TIME_INCOME",
-            amount: gigAmount,
-            source: action.source || "Gig Delivery",
-            newTotalPartTime: partTime,
-          };
+            // Also insert an INCOME transaction
+            let catRes = await query(`SELECT id FROM "Category" WHERE "userId" = $1 LIMIT 1`, [userId]);
+            let accRes = await query(`SELECT id FROM "Account" WHERE "userId" = $1 LIMIT 1`, [userId]);
+            const categoryId = catRes.rows[0]?.id;
+            const accountId = accRes.rows[0]?.id;
+
+            if (accountId && categoryId) {
+              await query(
+                `INSERT INTO "Transaction" (id, "userId", "accountId", "categoryId", amount, type, description, "transactionDate", source)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, 'INCOME', $5, NOW(), 'MANUAL')`,
+                [userId, accountId, categoryId, gigAmount, `Part-Time Gig: ${action.source || 'Earnings'}`]
+              );
+              await query(`UPDATE "Account" SET balance = balance + $1 WHERE id = $2`, [gigAmount, accountId]);
+            }
+
+            actionExecuted = {
+              type: "LOG_PART_TIME_INCOME",
+              amount: gigAmount,
+              source: action.source || "Gig Delivery",
+              newTotalPartTime: partTime,
+            };
+          }
         } else if (action.type === "CREATE_PLANNER_TASK" && action.title) {
-          const taskAmount = parseFloat(action.amount) || 0;
+          const taskAmount = Math.max(0, parseFloat(action.amount) || 0);
           const plannerRes = await query(
             `INSERT INTO "PlannerEvent" (id, "userId", title, category, "targetAmount", "allocatedAmount", "isCompleted", "createdAt")
              VALUES (gen_random_uuid(), $1, $2, $3, $4, 0, false, NOW())

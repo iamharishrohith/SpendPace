@@ -12,6 +12,12 @@ export async function POST(req) {
 
 async function handleDailyRollover(req) {
   try {
+    const authHeader = req.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Unauthorized: Invalid or missing CRON_SECRET" }, { status: 401 });
+    }
+
     const usersRes = await query(`
       SELECT id, email, "fullName", "monthlyIncome"::float, "payCycleDay"
       FROM "User"

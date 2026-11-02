@@ -20,11 +20,12 @@ export async function POST(req) {
     }
 
     // 2. Find or create matching Category
+    const safeCategory = (categoryName.split(" ")[0] || "").replace(/[%_\\]/g, '\\$&');
     let categoryRes = await query(`
       SELECT id FROM "Category" 
       WHERE "userId" = $1 AND LOWER(name) LIKE LOWER($2) 
       LIMIT 1
-    `, [userId, `%${categoryName.split(" ")[0]}%`]);
+    `, [userId, `%${safeCategory}%`]);
 
     let categoryId = categoryRes.rows[0]?.id;
     if (!categoryId) {
@@ -59,6 +60,7 @@ export async function POST(req) {
     }
 
     // 4. Insert Transaction
+    const descriptionText = notes || tagName || "Quick Micro-Spend";
     const txRes = await query(`
       INSERT INTO "Transaction" (
         id, "userId", "accountId", "categoryId", amount, type, description, 
@@ -69,7 +71,10 @@ export async function POST(req) {
         NOW(), 'MANUAL', false
       )
       RETURNING id, amount::float, description, "transactionDate"
-    `, [userId, accountId, categoryId, numAmount, description]);
+    `, [userId, accountId, categoryId, numAmount, descriptionText]);
+
+    // 5. Deduct from account balance atomically
+    await query(`UPDATE "Account" SET balance = balance - $1 WHERE id = $2`, [numAmount, accountId]);
 
     const now = new Date();
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
