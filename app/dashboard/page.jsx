@@ -33,7 +33,8 @@ import {
   Handshake,
   ArrowRight,
   MessageSquare,
-  Bot
+  Bot,
+  Coins
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -238,8 +239,35 @@ export default function DashboardPage() {
             {/* Zero-Typing Micro-Spend Quick Tracker */}
             <QuickSpendTracker onExpenseLogged={fetchDashboard} />
 
-            {/* Temporal Patterns & Calendar Quick Gateway */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Temporal Patterns, Investments & Lending Gateways */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Link
+                href="/investments"
+                className="group p-5 rounded-3xl fintech-card hover:border-amber-500/50 transition-all flex items-center justify-between shadow-sm"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:scale-105 transition-transform">
+                    <Coins className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        SIP, Digi Gold & Policies
+                      </h4>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                        {data?.investments?.length || 0} Tracked
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Quarterly/yearly SIPs, gold & LIC auto-pacing reserve
+                    </p>
+                  </div>
+                </div>
+                <div className="p-2 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] group-hover:bg-amber-500 group-hover:text-white text-slate-400 transition-all">
+                  <ArrowRight className="w-4 h-4" />
+                </div>
+              </Link>
+
               <Link
                 href="/patterns"
                 className="group p-5 rounded-3xl fintech-card hover:border-emerald-500/50 transition-all flex items-center justify-between shadow-sm"
@@ -251,14 +279,14 @@ export default function DashboardPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                        Spending Pattern Analyser & Calendar
+                        Patterns & Calendar
                       </h4>
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                         Live Ledger
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Daily save ticks (✓), red over-limit tags, 3-day waves & weekend surge
+                      Daily save ticks (✓), 3-day waves & weekend surge
                     </p>
                   </div>
                 </div>
@@ -278,14 +306,14 @@ export default function DashboardPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                        Friends & Informal Money Lent
+                        Money Lent & IOUs
                       </h4>
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-500/10 text-teal-600 border border-teal-500/20">
                         WhatsApp Nudge
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Manage friendly receivables, track frozen capital & send reminders
+                      Track receivables & send WhatsApp reminders
                     </p>
                   </div>
                 </div>

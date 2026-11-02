@@ -25,7 +25,8 @@ import {
   CalendarCheck,
   ChevronDown,
   User as UserIcon,
-  Code2
+  Code2,
+  Coins
 } from "lucide-react";
 
 export default function Navbar({ onOpenAddModal, onOpenCommandBar }) {
@@ -88,6 +89,7 @@ export default function Navbar({ onOpenAddModal, onOpenCommandBar }) {
 
   const appNavLinks = [
     { name: "Dashboard", href: "/dashboard", icon: Compass },
+    { name: "Investments", href: "/investments", icon: Coins },
     { name: "Patterns", href: "/patterns", icon: CalendarCheck },
     { name: "Budgets", href: "/budgets", icon: PieChart },
     { name: "Goals", href: "/goals", icon: Target },

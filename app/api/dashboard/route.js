@@ -141,6 +141,37 @@ export async function GET(req) {
       const baselineLivingCost = 0;
       const committedBills = totalDebtMonthly;
 
+      // Fetch active investments & policies (SIP, Digi Gold, LIC, Insurance)
+      let investments = [];
+      try {
+        const invRes = await query(`
+          SELECT 
+            id, name, type, frequency, "installmentAmount"::float, 
+            "currentValue"::float, "targetValue"::float, "nextDueDate", 
+            "policyFolioNumber", "autoPaceReserve", "isActive"
+          FROM "Investment"
+          WHERE "userId" = $1 AND "isActive" = true
+          ORDER BY "nextDueDate" ASC
+        `, [user.id]);
+        investments = invRes.rows || [];
+      } catch (invErr) {
+        investments = [];
+      }
+
+      let monthlyPolicyReserve = 0;
+      let totalInvestmentsValue = 0;
+      for (const inv of investments) {
+        const currentVal = parseFloat(inv.currentValue) || 0;
+        totalInvestmentsValue += currentVal;
+        if (inv.autoPaceReserve) {
+          const installment = parseFloat(inv.installmentAmount) || 0;
+          if (inv.frequency === "QUARTERLY") monthlyPolicyReserve += Math.round((installment / 3) * 100) / 100;
+          else if (inv.frequency === "HALF_YEARLY") monthlyPolicyReserve += Math.round((installment / 6) * 100) / 100;
+          else if (inv.frequency === "YEARLY") monthlyPolicyReserve += Math.round((installment / 12) * 100) / 100;
+          else monthlyPolicyReserve += installment;
+        }
+      }
+
       const now = new Date();
       const currentDay = now.getDate();
       const payCycleDay = parseInt(user.payCycleDay, 10) || 1;
@@ -176,7 +207,8 @@ export async function GET(req) {
       // - Committed EMIs/Bills
       // - Automatic Goal Allocations
       // - Monthly Piggy Bank Personal Savings!
-      const totalCommittedAndSaved = committedBills + monthlyGoalAllocation + monthlyPiggyBank;
+      // - Amortized Monthly SIP & Policy Reserve (Quarterly/Half-Yearly/Yearly commitments)
+      const totalCommittedAndSaved = committedBills + monthlyGoalAllocation + monthlyPiggyBank + Math.round(monthlyPolicyReserve);
       const baseDiscretionaryPool = totalHouseholdInflow > 0
         ? Math.max(0, totalHouseholdInflow - totalCommittedAndSaved)
         : Math.max(0, effectiveWalletBalance - totalDebtMonthly);
@@ -267,6 +299,9 @@ export async function GET(req) {
         transactions,
         goals,
         liabilities,
+        investments,
+        totalInvestmentsValue,
+        monthlyPolicyReserve: Math.round(monthlyPolicyReserve),
         metrics: {
           totalSpent,
           monthSpent,
@@ -284,6 +319,8 @@ export async function GET(req) {
           totalCommittedAndSaved,
           monthlyGoalAllocation,
           monthlyPiggyBank,
+          monthlyPolicyReserve: Math.round(monthlyPolicyReserve),
+          totalInvestmentsValue,
           daysRemaining,
           totalDiscretionary,
           remainingDiscretionary,

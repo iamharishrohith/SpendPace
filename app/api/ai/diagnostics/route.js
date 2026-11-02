@@ -71,7 +71,19 @@ export async function GET(req) {
         totalSpent: transactions.filter(t => t.type === "EXPENSE").reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0),
       };
 
-      return await diagnoseFinancialHealth({ user, transactions, metrics, liabilities, goals });
+      // Fetch active investments & policies (SIP, Digi Gold, LIC, Insurance)
+      let investments = [];
+      try {
+        const invRes = await query(`
+          SELECT name, type, frequency, "installmentAmount"::float, "currentValue"::float, "nextDueDate", "autoPaceReserve"
+          FROM "Investment" WHERE "userId" = $1 AND "isActive" = true
+        `, [userId]);
+        investments = invRes.rows || [];
+      } catch (e) {
+        investments = [];
+      }
+
+      return await diagnoseFinancialHealth({ user, transactions, metrics, liabilities, goals, investments });
     };
 
     const report = forceRefresh 
